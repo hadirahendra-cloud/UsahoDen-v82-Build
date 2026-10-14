@@ -1,11 +1,11 @@
-name: Build UsahoDen v82 Release Signed
+name: Build UsahoDen v82 FIX
 
 on:
   workflow_dispatch:
   push:
     paths:
-      - 'UsahoDen-v82-Riwayat-Sticky-Compact-Source.zip'
-      - '.github/workflows/build-v82.yml'
+      - "UsahoDen-v82-Riwayat-Sticky-Compact-Source.zip"
+      - ".github/workflows/build-v82.yml"
 
 permissions:
   contents: read
@@ -13,8 +13,7 @@ permissions:
 jobs:
   build:
     name: Build and Sign UsahoDen v82
-    runs-on: ubuntu-22.04
-    timeout-minutes: 45
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
@@ -24,192 +23,164 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.7'
+          gradle-version: "8.7"
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: "latest"
+          accept-android-sdk-licenses: true
+          packages: |
+            platform-tools
+            platforms;android-35
+            build-tools;35.0.0
 
-      - name: Install Android SDK packages
+      - name: Verify Android SDK
         shell: bash
         run: |
-          set -euo pipefail
+          set -e
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          test -x "$ANDROID_HOME/platform-tools/adb"
+          test -d "$ANDROID_HOME/platforms/android-35"
+          test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          echo "Android SDK siap."
 
-          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+      - name: Prepare permanent keystore
+        shell: bash
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.TOKOKU_KEYSTORE_PASSWORD }}
+        run: |
+          set -e
+          KEYSTORE="signing/usaho-den-v61-permanent.jks"
 
-          if [ ! -x "$SDKMANAGER" ]; then
-            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" \
-              -type f -name sdkmanager -print -quit)"
-          fi
-
-          if [ -z "$SDKMANAGER" ] || [ ! -x "$SDKMANAGER" ]; then
-            echo "ERROR: sdkmanager tidak ditemukan."
-            find "$ANDROID_HOME/cmdline-tools" -maxdepth 4 -type f \
-              -name sdkmanager -print || true
+          if [ ! -f "$KEYSTORE" ]; then
+            echo "::error::Keystore permanen tidak ditemukan: $KEYSTORE"
             exit 1
           fi
 
-          echo "SDK Manager: $SDKMANAGER"
-
-          set +o pipefail
-          yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses
-          LICENSE_STATUS=$?
-          set -o pipefail
-
-          if [ "$LICENSE_STATUS" -ne 0 ]; then
-            echo "Peringatan: proses lisensi mengembalikan status $LICENSE_STATUS"
+          if [ -z "$KEYSTORE_PASSWORD" ]; then
+            echo "::error::Secret TOKOKU_KEYSTORE_PASSWORD belum diisi."
+            exit 1
           fi
 
-          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" \
-            "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0"
+          keytool -list \
+            -keystore "$KEYSTORE" \
+            -storepass "$KEYSTORE_PASSWORD"
 
-          echo "Android SDK siap."
+          echo "Keystore berhasil diverifikasi."
 
       - name: Extract source ZIP
         shell: bash
         run: |
-          set -euo pipefail
-
+          set -e
           ZIP="UsahoDen-v82-Riwayat-Sticky-Compact-Source.zip"
 
           if [ ! -f "$ZIP" ]; then
-            echo "ERROR: ZIP sumber tidak ditemukan di root repository."
-            ls -la
+            echo "::error::ZIP sumber tidak ditemukan: $ZIP"
+            echo "Pastikan ZIP berada di folder utama repository."
+            find . -maxdepth 3 -type f -name "*.zip"
             exit 1
           fi
 
-          mkdir -p source
-          unzip -q "$ZIP" -d source
+          mkdir -p "$GITHUB_WORKSPACE/source"
+          unzip -q "$ZIP" -d "$GITHUB_WORKSPACE/source"
 
-          SETTINGS="$(find source -type f \
-            \( -name settings.gradle -o -name settings.gradle.kts \) \
-            -print -quit)"
+          PROJECT_DIR="$(find "$GITHUB_WORKSPACE/source" \
+            -type f -path "*/app/build.gradle" \
+            -print -quit | xargs -r dirname | xargs -r dirname)"
 
-          if [ -z "$SETTINGS" ]; then
-            echo "ERROR: settings.gradle tidak ditemukan dalam ZIP."
-            find source -maxdepth 5 -type f | head -100
+          if [ -z "$PROJECT_DIR" ] || [ ! -f "$PROJECT_DIR/app/build.gradle" ]; then
+            echo "::error::Folder proyek Android tidak ditemukan di ZIP."
+            find "$GITHUB_WORKSPACE/source" -maxdepth 5 -type f \
+              \( -name "build.gradle" -o -name "settings.gradle" \)
             exit 1
           fi
 
-          PROJECT_DIR="${SETTINGS%/*}"
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-          echo "Proyek ditemukan di: $PROJECT_DIR"
-
-      - name: Verify permanent keystore and secrets
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.TOKOKU_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.TOKOKU_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.TOKOKU_KEY_PASSWORD }}
-        run: |
-          set -euo pipefail
-
-          test -n "$KEYSTORE_PASSWORD" || {
-            echo "Secret TOKOKU_KEYSTORE_PASSWORD belum diatur."
-            exit 1
-          }
-
-          test -n "$KEY_ALIAS" || {
-            echo "Secret TOKOKU_KEY_ALIAS belum diatur."
-            exit 1
-          }
-
-          test -n "$KEY_PASSWORD" || {
-            echo "Secret TOKOKU_KEY_PASSWORD belum diatur."
-            exit 1
-          }
-
-          test -f signing/usaho-den-v61-permanent.jks || {
-            echo "Keystore permanen tidak ditemukan di signing/."
-            exit 1
-          }
-
-          keytool -list \
-            -keystore signing/usaho-den-v61-permanent.jks \
-            -storepass "$KEYSTORE_PASSWORD" \
-            -alias "$KEY_ALIAS" >/dev/null
-
-          echo "Keystore permanen berhasil diverifikasi."
+          echo "Proyek ditemukan: $PROJECT_DIR"
 
       - name: Build release APK
         shell: bash
         run: |
-          set -euo pipefail
+          set -e
           cd "$PROJECT_DIR"
 
-          if [ -f gradlew ]; then
-            chmod +x gradlew
-            ./gradlew --no-daemon :app:assembleRelease
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+            ./gradlew --no-daemon clean assembleRelease
           else
-            gradle --no-daemon :app:assembleRelease
+            gradle --no-daemon clean assembleRelease
           fi
 
-      - name: Sign release APK
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.TOKOKU_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.TOKOKU_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.TOKOKU_KEY_PASSWORD }}
+      - name: Check APK
         shell: bash
         run: |
-          set -euo pipefail
-
-          APK="$(find "$PROJECT_DIR" -type f \
-            -path '*/build/outputs/apk/release/*.apk' \
-            -print -quit)"
+          set -e
+          APK="$(find "$PROJECT_DIR/app/build/outputs/apk/release" \
+            -type f -name "*.apk" -print -quit)"
 
           if [ -z "$APK" ]; then
-            echo "ERROR: APK release tidak ditemukan."
+            echo "::error::APK release tidak ditemukan."
+            exit 1
+          fi
+
+          mkdir -p "$GITHUB_WORKSPACE/output"
+          cp "$APK" "$GITHUB_WORKSPACE/output/UsahoDen-v82-unsigned.apk"
+          echo "APK hasil build ditemukan."
+
+      - name: Sign release APK
+        shell: bash
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.TOKOKU_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: usahoden
+          KEY_PASSWORD: ${{ secrets.TOKOKU_KEY_PASSWORD }}
+        run: |
+          set -e
+
+          if [ -z "$KEY_PASSWORD" ]; then
+            echo "::error::Secret TOKOKU_KEY_PASSWORD belum diisi."
             exit 1
           fi
 
           BUILD_TOOLS="$ANDROID_HOME/build-tools/35.0.0"
-          mkdir -p output
+          KEYSTORE="$GITHUB_WORKSPACE/signing/usaho-den-v61-permanent.jks"
+          INPUT="$GITHUB_WORKSPACE/output/UsahoDen-v82-unsigned.apk"
+          ALIGNED="$GITHUB_WORKSPACE/output/UsahoDen-v82-aligned.apk"
+          OUTPUT="$GITHUB_WORKSPACE/output/UsahoDen-v82.apk"
 
-          "$BUILD_TOOLS/zipalign" -f -p 4 \
-            "$APK" output/UsahoDen-v82-aligned.apk
+          "$BUILD_TOOLS/zipalign" -f -v 4 "$INPUT" "$ALIGNED"
 
           "$BUILD_TOOLS/apksigner" sign \
-            --ks signing/usaho-den-v61-permanent.jks \
+            --ks "$KEYSTORE" \
             --ks-key-alias "$KEY_ALIAS" \
             --ks-pass env:KEYSTORE_PASSWORD \
             --key-pass env:KEY_PASSWORD \
-            --out output/UsahoDen-v82-release.apk \
-            output/UsahoDen-v82-aligned.apk
+            --out "$OUTPUT" \
+            "$ALIGNED"
 
-          "$BUILD_TOOLS/apksigner" verify --verbose \
-            output/UsahoDen-v82-release.apk
+          "$BUILD_TOOLS/apksigner" verify --verbose "$OUTPUT"
 
-          rm -f output/UsahoDen-v82-aligned.apk
-
-      - name: Verify application identity
+      - name: Verify application ID
         shell: bash
         run: |
-          set -euo pipefail
-
+          set -e
+          APK="$GITHUB_WORKSPACE/output/UsahoDen-v82.apk"
           AAPT="$ANDROID_HOME/build-tools/35.0.0/aapt"
 
-          "$AAPT" dump badging output/UsahoDen-v82-release.apk \
-            > output/badging.txt
+          "$AAPT" dump badging "$APK" | grep -F \
+            "package: name='com.tokoku.app'"
 
-          head -n 1 output/badging.txt
+          echo "Application ID cocok untuk pembaruan aplikasi."
 
-          grep -q "package: name='com.tokoku.app'" \
-            output/badging.txt || {
-              echo "ERROR: Application ID bukan com.tokoku.app."
-              exit 1
-            }
-
-          echo "Application ID cocok."
-
-      - name: Upload signed release APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v82-release-signed
-          path: output/UsahoDen-v82-release.apk
+          name: UsahoDen-v82-APK
+          path: output/UsahoDen-v82.apk
           if-no-files-found: error
           retention-days: 14
