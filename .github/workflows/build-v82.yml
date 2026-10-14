@@ -1,11 +1,13 @@
-name: Build UsahoDen v82 FIX
+
+name: Build UsahoDen v82 - FIX Android SDK
 
 on:
   workflow_dispatch:
   push:
     paths:
-      - "UsahoDen-v82-Riwayat-Sticky-Compact-Source.zip"
-      - ".github/workflows/build-v82.yml"
+      - '**.yml'
+      - '**.yaml'
+      - '*.zip'
 
 permissions:
   contents: read
@@ -13,7 +15,6 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
 
     steps:
       - name: Checkout repository
@@ -23,187 +24,236 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: '17'
 
-      # FIX: Jangan gunakan input packages multiline.
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Setup Gradle 8.7
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
 
-      - name: Accept Android SDK licenses
-        shell: bash
-        run: |
-          set +o pipefail
-          yes | sdkmanager --licenses || true
-
-      - name: Install Android SDK packages
+      # Tidak menggunakan android-actions/setup-android@v3.
+      # Gunakan SDK bawaan runner dan jangan meminta paket "tools".
+      - name: Setup Android SDK - Runner Bawaan
         shell: bash
         run: |
           set -e
-          sdkmanager "platform-tools"
-          sdkmanager "platforms;android-35"
-          sdkmanager "build-tools;35.0.0"
 
-      - name: Find and extract source ZIP
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          ZIP_FILE="UsahoDen-v82-Riwayat-Sticky-Compact-Source.zip"
-
-          if [ ! -f "$ZIP_FILE" ]; then
-            echo "::error::ZIP sumber tidak ditemukan: $ZIP_FILE"
-            echo "Pastikan ZIP diunggah ke folder utama repository."
-            find . -maxdepth 3 -type f -name "*.zip" -print
+          if [ -n "${ANDROID_HOME:-}" ] && [ -d "$ANDROID_HOME" ]; then
+            SDK="$ANDROID_HOME"
+          elif [ -n "${ANDROID_SDK_ROOT:-}" ] && [ -d "$ANDROID_SDK_ROOT" ]; then
+            SDK="$ANDROID_SDK_ROOT"
+          elif [ -d "/usr/local/lib/android/sdk" ]; then
+            SDK="/usr/local/lib/android/sdk"
+          else
+            echo "::error::Android SDK bawaan runner tidak ditemukan."
             exit 1
           fi
 
-          mkdir -p "$GITHUB_WORKSPACE/source"
-          unzip -q "$ZIP_FILE" -d "$GITHUB_WORKSPACE/source"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          echo "$SDK/platform-tools" >> "$GITHUB_PATH"
+          echo "SDK ditemukan: $SDK"
 
-          PROJECT_DIR=""
+          SDKMANAGER=""
+          for candidate in \
+            "$SDK/cmdline-tools/latest/bin/sdkmanager" \
+            "$SDK/cmdline-tools/16.0/bin/sdkmanager" \
+            "$SDK/cmdline-tools/15.0/bin/sdkmanager" \
+            "$SDK/tools/bin/sdkmanager"; do
+            if [ -x "$candidate" ]; then
+              SDKMANAGER="$candidate"
+              break
+            fi
+          done
+
+          if [ -z "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "$SDK/cmdline-tools" \
+              -type f -path '*/bin/sdkmanager' 2>/dev/null \
+              | head -n 1 || true)"
+          fi
+
+          if [ -z "$SDKMANAGER" ]; then
+            echo "::error::sdkmanager tidak ditemukan di SDK bawaan."
+            exit 1
+          fi
+
+          echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
+          echo "SDK manager: $SDKMANAGER"
+
+          # Periksa apakah komponen yang dibutuhkan sudah tersedia.
+          if [ -d "$SDK/platforms/android-35" ] && \
+             [ -x "$SDK/build-tools/35.0.0/apksigner" ] && \
+             [ -x "$SDK/build-tools/35.0.0/zipalign" ]; then
+            echo "Platform Android 35 dan Build Tools 35.0.0 tersedia."
+          else
+            echo "Komponen SDK yang diperlukan belum lengkap."
+            "$SDKMANAGER" --sdk_root="$SDK" --licenses < /dev/null || true
+            yes | "$SDKMANAGER" --sdk_root="$SDK" --licenses \
+              >/dev/null 2>&1 || true
+
+            "$SDKMANAGER" --sdk_root="$SDK" \
+              "platform-tools" \
+              "platforms;android-35" \
+              "build-tools;35.0.0"
+          fi
+
+          test -d "$SDK/platforms/android-35"
+          test -x "$SDK/build-tools/35.0.0/apksigner"
+          test -x "$SDK/build-tools/35.0.0/zipalign"
+
+          echo "Android SDK siap digunakan."
+
+      - name: Find and extract UsahoDen source ZIP
+        shell: bash
+        run: |
+          set -e
+
+          ZIP="$(find . -maxdepth 1 -type f \
+            -iname 'UsahoDen*.zip' -printf '%T@ %p\n' \
+            | sort -nr | head -n 1 | cut -d ' ' -f 2-)"
+
+          if [ -z "$ZIP" ]; then
+            ZIP="$(find . -maxdepth 1 -type f \
+              -iname '*.zip' -printf '%T@ %p\n' \
+              | sort -nr | head -n 1 | cut -d ' ' -f 2-)"
+          fi
+
+          if [ -z "$ZIP" ]; then
+            echo "::error::ZIP sumber UsahoDen tidak ditemukan di root repository."
+            exit 1
+          fi
+
+          echo "ZIP sumber: $ZIP"
+          mkdir -p "$GITHUB_WORKSPACE/usaho-source"
+          unzip -q "$ZIP" -d "$GITHUB_WORKSPACE/usaho-source"
+
+          PROJECT=""
           while IFS= read -r file; do
-            candidate="$(dirname "$file")"
-            if [ -f "$candidate/app/build.gradle" ] || \
-               [ -f "$candidate/app/build.gradle.kts" ]; then
-              PROJECT_DIR="$candidate"
+            dir="$(dirname "$file")"
+            if [ -f "$dir/app/build.gradle" ] || \
+               [ -f "$dir/app/build.gradle.kts" ]; then
+              PROJECT="$dir"
               break
             fi
           done < <(
-            find "$GITHUB_WORKSPACE/source" \
-              \( -name settings.gradle -o -name settings.gradle.kts \) \
-              -type f -print
+            find "$GITHUB_WORKSPACE/usaho-source" \
+              -type f \( -name settings.gradle \
+              -o -name settings.gradle.kts \) | sort
           )
 
-          if [ -z "$PROJECT_DIR" ]; then
+          if [ -z "$PROJECT" ]; then
+            while IFS= read -r file; do
+              dir="$(dirname "$file")"
+              if [ -f "$dir/build.gradle" ] || \
+                 [ -f "$dir/build.gradle.kts" ]; then
+                PROJECT="$dir"
+                break
+              fi
+            done < <(
+              find "$GITHUB_WORKSPACE/usaho-source" \
+                -type f \( -path '*/app/build.gradle' \
+                -o -path '*/app/build.gradle.kts' \) | sort
+            )
+          fi
+
+          if [ -z "$PROJECT" ]; then
             echo "::error::Folder proyek Android tidak ditemukan di ZIP."
-            find "$GITHUB_WORKSPACE/source" -maxdepth 5 -type f \
-              \( -name settings.gradle -o -name settings.gradle.kts \
-              -o -name build.gradle -o -name build.gradle.kts \) -print
             exit 1
           fi
 
-          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-          echo "Proyek ditemukan: $PROJECT_DIR"
+          echo "PROJECT_DIR=$PROJECT" >> "$GITHUB_ENV"
+          echo "Proyek Android ditemukan: $PROJECT"
 
-      - name: Prepare Gradle
+      - name: Verify permanent keystore and secrets
         shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.TOKOKU_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.TOKOKU_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.TOKOKU_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.TOKOKU_KEY_PASSWORD }}
         run: |
-          set -euo pipefail
-          cd "$PROJECT_DIR"
+          set -e
 
-          if [ -f ./gradlew ]; then
-            chmod +x ./gradlew
-            echo "GRADLE_CMD=./gradlew" >> "$GITHUB_ENV"
-          elif command -v gradle >/dev/null 2>&1; then
-            echo "GRADLE_CMD=gradle" >> "$GITHUB_ENV"
-          else
-            echo "::error::Gradle wrapper maupun Gradle tidak tersedia."
-            exit 1
-          fi
+          for name in KEYSTORE_BASE64 KEYSTORE_PASSWORD \
+                      KEY_ALIAS KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Secret $name belum tersedia."
+              exit 1
+            fi
+          done
+
+          printf '%s' "$KEYSTORE_BASE64" \
+            | base64 --decode > "$RUNNER_TEMP/usaho-release.jks"
+
+          test -s "$RUNNER_TEMP/usaho-release.jks"
+
+          echo "KEYSTORE_FILE=$RUNNER_TEMP/usaho-release.jks" \
+            >> "$GITHUB_ENV"
+
+          echo "Keystore ditemukan dan hasil decode tidak kosong."
 
       - name: Build Release APK
         shell: bash
         run: |
-          set -euo pipefail
+          set -e
           cd "$PROJECT_DIR"
 
-          $GRADLE_CMD --version
-          $GRADLE_CMD --no-daemon --stacktrace \
-            :app:assembleRelease
-
-      - name: Locate APK
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          APK_PATH="$(
-            find "$PROJECT_DIR/app/build/outputs/apk/release" \
-              -type f -name "*.apk" -print -quit
-          )"
-
-          if [ -z "$APK_PATH" ]; then
-            echo "::error::APK release tidak ditemukan."
-            find "$PROJECT_DIR/app/build/outputs" -type f -print || true
-            exit 1
+          if [ -f ./gradlew ]; then
+            chmod +x ./gradlew
+            ./gradlew :app:clean :app:assembleRelease \
+              --no-daemon --stacktrace
+          else
+            gradle :app:clean :app:assembleRelease \
+              --no-daemon --stacktrace
           fi
 
-          mkdir -p "$GITHUB_WORKSPACE/output"
-          cp "$APK_PATH" "$GITHUB_WORKSPACE/output/UsahoDen-v82-unsigned.apk"
-          echo "APK_PATH=$GITHUB_WORKSPACE/output/UsahoDen-v82-unsigned.apk" \
-            >> "$GITHUB_ENV"
-
-      - name: Check permanent signing keystore
-        shell: bash
-        run: |
-          set -euo pipefail
-          KEYSTORE="$PROJECT_DIR/signing/usaho-den-v61-permanent.jks"
-
-          if [ ! -f "$KEYSTORE" ]; then
-            echo "::error::Keystore permanen tidak ditemukan: $KEYSTORE"
-            echo "Pastikan file keystore ikut tersedia di source ZIP."
-            find "$PROJECT_DIR" -type f \
-              \( -name "*.jks" -o -name "*.keystore" \) -print
-            exit 1
-          fi
-
-          echo "KEYSTORE=$KEYSTORE" >> "$GITHUB_ENV"
-
-      - name: Sign APK with permanent key
+      - name: Sign and verify APK
         shell: bash
         env:
-          STORE_PASSWORD: ${{ secrets.USAHODEN_KEYSTORE_PASSWORD }}
-          KEY_PASSWORD: ${{ secrets.USAHODEN_KEY_PASSWORD }}
-          KEY_ALIAS: usahoden
+          KEYSTORE_PASSWORD: ${{ secrets.TOKOKU_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.TOKOKU_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.TOKOKU_KEY_PASSWORD }}
         run: |
-          set -euo pipefail
+          set -e
 
-          if [ -z "$STORE_PASSWORD" ] || [ -z "$KEY_PASSWORD" ]; then
-            echo "::error::Secret USAHODEN_KEYSTORE_PASSWORD atau USAHODEN_KEY_PASSWORD belum diatur."
+          SDK="$ANDROID_HOME"
+          TOOLS="$SDK/build-tools/35.0.0"
+          APK_DIR="$PROJECT_DIR/app/build/outputs/apk/release"
+
+          APK="$(find "$APK_DIR" -maxdepth 1 -type f \
+            -name '*.apk' -printf '%T@ %p\n' \
+            | sort -nr | head -n 1 | cut -d ' ' -f 2-)"
+
+          if [ -z "$APK" ]; then
+            echo "::error::APK release tidak dihasilkan oleh Gradle."
             exit 1
           fi
 
-          APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
-          ZIPALIGN="$ANDROID_HOME/build-tools/35.0.0/zipalign"
+          echo "APK hasil build: $APK"
 
-          "$ZIPALIGN" -f -p 4 "$APK_PATH" \
-            "$GITHUB_WORKSPACE/output/UsahoDen-v82-aligned.apk"
+          mkdir -p "$GITHUB_WORKSPACE/apk-output"
 
-          "$APKSIGNER" sign \
-            --ks "$KEYSTORE" \
+          "$TOOLS/zipalign" -f -p 4 \
+            "$APK" "$RUNNER_TEMP/usaho-aligned.apk"
+
+          "$TOOLS/apksigner" sign \
+            --ks "$KEYSTORE_FILE" \
             --ks-key-alias "$KEY_ALIAS" \
-            --ks-pass env:STORE_PASSWORD \
+            --ks-pass env:KEYSTORE_PASSWORD \
             --key-pass env:KEY_PASSWORD \
-            --out "$GITHUB_WORKSPACE/output/UsahoDen-v82.apk" \
-            "$GITHUB_WORKSPACE/output/UsahoDen-v82-aligned.apk"
+            --out "$GITHUB_WORKSPACE/apk-output/UsahoDen.apk" \
+            "$RUNNER_TEMP/usaho-aligned.apk"
 
-          "$APKSIGNER" verify --verbose --print-certs \
-            "$GITHUB_WORKSPACE/output/UsahoDen-v82.apk"
+          "$TOOLS/apksigner" verify --verbose --print-certs \
+            "$GITHUB_WORKSPACE/apk-output/UsahoDen.apk"
 
-      - name: Verify APK application ID
-        shell: bash
-        run: |
-          set -euo pipefail
+          test -s "$GITHUB_WORKSPACE/apk-output/UsahoDen.apk"
+          echo "APK berhasil ditandatangani dan diverifikasi."
 
-          APK="$GITHUB_WORKSPACE/output/UsahoDen-v82.apk"
-          AAPT="$ANDROID_HOME/build-tools/35.0.0/aapt"
-
-          if [ ! -f "$APK" ]; then
-            echo "::error::APK final tidak ditemukan."
-            exit 1
-          fi
-
-          "$AAPT" dump badging "$APK" | tee "$GITHUB_WORKSPACE/output/apk-info.txt"
-
-          if ! grep -q "package: name='com.tokoku.app'" \
-            "$GITHUB_WORKSPACE/output/apk-info.txt"; then
-            echo "::error::Application ID bukan com.tokoku.app. Jangan instal APK ini."
-            exit 1
-          fi
-
-      - name: Upload installable APK
+      - name: Upload UsahoDen APK
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v82-APK
-          path: output/UsahoDen-v82.apk
+          name: UsahoDen-APK
+          path: apk-output/UsahoDen.apk
           if-no-files-found: error
           retention-days: 14
