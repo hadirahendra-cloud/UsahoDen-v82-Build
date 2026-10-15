@@ -1,5 +1,5 @@
 
-name: Build UsahoDen v99 Header Gonjong Tengah
+name: Build UsahoDen v100 Header Gonjong Ringkas
 
 on:
   workflow_dispatch:
@@ -30,7 +30,7 @@ jobs:
           set -euo pipefail
           SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
           if [ -z "$SDKMANAGER" ]; then
-            echo "::error::sdkmanager tidak ditemukan"
+            echo "::error::sdkmanager tidak ditemukan."
             exit 1
           fi
           echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
@@ -40,7 +40,7 @@ jobs:
         run: |
           yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses || true
 
-      - name: Install required SDK packages
+      - name: Install Android SDK packages
         shell: bash
         run: |
           set -euo pipefail
@@ -60,16 +60,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ZIP="$(find . -maxdepth 5 -type f -iname 'UsahoDen-v99-Header-Gonjong-Tengah-Source.zip' -print -quit)"
+          ZIP="$(find . -maxdepth 5 -type f -iname 'UsahoDen-v100-Header-Gonjong-Ringkas-Source.zip' -print -quit)"
           if [ -z "$ZIP" ]; then
-            echo "::error::Upload ZIP v99 ke repository terlebih dahulu"
+            echo "::error::Upload ZIP v100 ke repository terlebih dahulu."
+            find . -maxdepth 5 -type f -iname '*.zip' -print || true
             exit 1
           fi
           mkdir -p "$RUNNER_TEMP/usaho-source"
           unzip -q "$ZIP" -d "$RUNNER_TEMP/usaho-source"
           PROJECT_DIR="$(find "$RUNNER_TEMP/usaho-source" -type f -path '*/app/build.gradle' -print -quit | sed 's#/app/build.gradle$##')"
           if [ -z "$PROJECT_DIR" ]; then
-            echo "::error::app/build.gradle tidak ditemukan"
+            echo "::error::app/build.gradle tidak ditemukan."
             exit 1
           fi
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
@@ -84,7 +85,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${KEYSTORE_BASE64:-}" ] || [ -z "${KEYSTORE_PASSWORD:-}" ] || [ -z "${KEY_ALIAS:-}" ]; then
-            echo "::error::Secrets keystore lama belum lengkap"
+            echo "::error::Secrets keystore lama belum lengkap. Build dihentikan."
             exit 1
           fi
           KEYSTORE="$RUNNER_TEMP/usahoden-existing.jks"
@@ -97,19 +98,19 @@ jobs:
             echo "TOKOKU_KEY_PASSWORD=${KEY_PASSWORD:-$KEYSTORE_PASSWORD}"
           } >> "$GITHUB_ENV"
 
-      - name: Verify identity and build APK
+      - name: Verify identity and build release APK
         shell: bash
         run: |
           set -euo pipefail
           cd "$PROJECT_DIR"
           grep -Fq "applicationId 'com.tokoku.app'" app/build.gradle
-          grep -Eq 'versionCode[[:space:]]+99' app/build.gradle
-          grep -Fq "versionName '3.22.15-header-gonjong-centered-v99'" app/build.gradle
-          grep -Fq 'usahoden-header-centered-admin-v99' app/src/main/assets/index.html
+          grep -Eq 'versionCode[[:space:]]+100' app/build.gradle
+          grep -Fq "versionName '3.22.15-header-gonjong-compact-v100'" app/build.gradle
+          grep -Fq 'usahoden-header-compact-centered-v100' app/src/main/assets/index.html
           test -s app/src/main/assets/header-royal-minang-bg.png
           gradle :app:assembleRelease --no-daemon --stacktrace
 
-      - name: Verify APK
+      - name: Verify APK package and signature
         shell: bash
         run: |
           set -euo pipefail
@@ -118,14 +119,14 @@ jobs:
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee "$RUNNER_TEMP/apk-info.txt"
           grep -Fq "package: name='com.tokoku.app'" "$RUNNER_TEMP/apk-info.txt"
-          grep -Fq "versionCode='99'" "$RUNNER_TEMP/apk-info.txt"
+          grep -Fq "versionCode='100'" "$RUNNER_TEMP/apk-info.txt"
           mkdir -p output
-          cp "$APK" output/UsahoDen-v99-Header-Gonjong-Tengah-Signed.apk
+          cp "$APK" output/UsahoDen-v100-Header-Gonjong-Ringkas-Signed.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v99-Header-Gonjong-Tengah-Signed
-          path: output/UsahoDen-v99-Header-Gonjong-Tengah-Signed.apk
+          name: UsahoDen-v100-Header-Gonjong-Ringkas-Signed
+          path: output/UsahoDen-v100-Header-Gonjong-Ringkas-Signed.apk
           if-no-files-found: error
           retention-days: 30
