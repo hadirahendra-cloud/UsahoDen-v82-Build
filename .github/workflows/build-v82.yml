@@ -1,208 +1,162 @@
-
-name: Build UsahoDen v82 - Login Tap Fix
+name: Build UsahoDen v83 Riwayat Pelanggan Header FIX
 
 on:
   workflow_dispatch:
   push:
     paths:
-      - '.github/workflows/build-v82.yml'
-      - '*.zip'
+      - ".github/workflows/build.yml"
+      - "UsahoDen-v83-Riwayat-Pelanggan-Header-FIX-Source.zip"
 
 permissions:
   contents: read
 
 jobs:
   build:
+    name: Build APK UsahoDen v83
     runs-on: ubuntu-latest
+    timeout-minutes: 35
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Java 17
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
 
-      - name: Setup Gradle 8.7
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Accept Android SDK licenses
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+
+      - name: Install Android SDK packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Set up Gradle 8.7
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.7'
+          gradle-version: "8.7"
 
-      - name: Setup Android SDK
+      - name: Extract and verify exact v83 source
         shell: bash
         run: |
           set -euo pipefail
+          ZIP="$GITHUB_WORKSPACE/UsahoDen-v83-Riwayat-Pelanggan-Header-FIX-Source.zip"
 
-          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
-          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
-          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
-
-          if [ ! -x "$SDK/build-tools/35.0.0/apksigner" ]; then
-            SDKMANAGER="$(find "$SDK/cmdline-tools" \
-              -type f -path '*/bin/sdkmanager' \
-              -print -quit 2>/dev/null || true)"
-
-            if [ -z "$SDKMANAGER" ]; then
-              echo "::error::sdkmanager tidak ditemukan."
-              exit 1
-            fi
-
-            yes | "$SDKMANAGER" \
-              --sdk_root="$SDK" --licenses \
-              >/dev/null 2>&1 || true
-
-            "$SDKMANAGER" --sdk_root="$SDK" \
-              "platform-tools" \
-              "platforms;android-35" \
-              "build-tools;35.0.0"
-          fi
-
-          test -d "$SDK/platforms/android-35"
-          test -x "$SDK/build-tools/35.0.0/zipalign"
-          test -x "$SDK/build-tools/35.0.0/apksigner"
-
-      - name: Extract fixed login source ZIP
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          ZIP="UsahoDen-v82-Login-Tap-Fix-Source.zip"
-
-          echo "Daftar ZIP di repository:"
-          find . -maxdepth 2 -type f -name '*.zip' -print
-
-          if [ ! -f "$ZIP" ]; then
-            echo "::error::File $ZIP belum ada di root repository."
-            echo "Upload ZIP ke folder utama GitHub terlebih dahulu."
-            exit 1
-          fi
-
-          mkdir -p "$RUNNER_TEMP/usaho-source"
-          unzip -q "$ZIP" -d "$RUNNER_TEMP/usaho-source"
-
-          PROJECT=""
-
-          while IFS= read -r file; do
-            dir="$(dirname "$file")"
-            if [ -f "$dir/app/build.gradle" ] || \
-               [ -f "$dir/app/build.gradle.kts" ]; then
-              PROJECT="$dir"
-              break
-            fi
-          done < <(
-            find "$RUNNER_TEMP/usaho-source" \
-              -type f \
-              \( -name settings.gradle \
-              -o -name settings.gradle.kts \) | sort
-          )
-
-          if [ -z "$PROJECT" ]; then
-            echo "::error::Proyek Android tidak ditemukan."
-            exit 1
-          fi
-
-          HTML="$PROJECT/app/src/main/assets/index.html"
-
-          if [ ! -f "$HTML" ]; then
-            echo "::error::index.html tidak ditemukan."
-            exit 1
-          fi
-
-          grep -q 'loginSubmitButton' "$HTML" || {
-            echo "::error::Perbaikan tombol login tidak ditemukan."
+          test -s "$ZIP" || {
+            echo "::error::ZIP sumber v83 tidak ditemukan di root repository."
+            find "$GITHUB_WORKSPACE" -maxdepth 2 -type f -iname '*.zip' -printf '%P\n' || true
             exit 1
           }
 
-          echo "PROJECT_DIR=$PROJECT" >> "$GITHUB_ENV"
-          echo "Sumber login fix ditemukan."
+          unzip -tq "$ZIP"
+          rm -rf extracted-source
+          mkdir -p extracted-source
+          unzip -oq "$ZIP" -d extracted-source
 
-      - name: Verify permanent keystore
+          PROJECT_DIR="$(find extracted-source -type f -path '*/app/build.gradle' -print -quit | sed 's#/app/build.gradle##')"
+
+          test -n "$PROJECT_DIR" || {
+            echo "::error::Proyek Android tidak ditemukan dalam ZIP."
+            exit 1
+          }
+
+          cp -a "$PROJECT_DIR"/. "$GITHUB_WORKSPACE"/
+
+          test -s app/build.gradle
+          test -s app/src/main/assets/index.html
+          test -s app/src/main/java/com/tokoku/app/MainActivity.java
+
+          grep -q "applicationId 'com.tokoku.app'" app/build.gradle
+          grep -q 'versionCode 83' app/build.gradle
+          grep -q "versionName '3.22.15-riwayat-pelanggan-header-v83'" app/build.gradle
+          grep -q 'v83: Riwayat pelanggan dimulai tepat di bawah header tetap' app/src/main/assets/index.html
+          grep -q 'function saveSale()' app/src/main/assets/index.html
+          grep -q 'function shareReceiptImage()' app/src/main/assets/index.html
+          grep -q "localStorage.getItem('tokoku_db')" app/src/main/assets/index.html
+
+          echo "Sumber v83 dan fitur penting terverifikasi."
+
+      - name: Decode permanent signing key
         shell: bash
         env:
-          KEYSTORE_BASE64: ${{ secrets.TOKOKU_KEYSTORE_BASE64 }}
-          KEYSTORE_PASSWORD: ${{ secrets.TOKOKU_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.TOKOKU_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.TOKOKU_KEY_PASSWORD }}
+          TOKOKU_KEYSTORE_BASE64: ${{ secrets.TOKOKU_KEYSTORE_BASE64 }}
+          TOKOKU_KEYSTORE_PASSWORD: ${{ secrets.TOKOKU_KEYSTORE_PASSWORD }}
+          TOKOKU_KEY_ALIAS: ${{ secrets.TOKOKU_KEY_ALIAS }}
+          TOKOKU_KEY_PASSWORD: ${{ secrets.TOKOKU_KEY_PASSWORD }}
         run: |
           set -euo pipefail
 
-          for name in KEYSTORE_BASE64 KEYSTORE_PASSWORD \
-                      KEY_ALIAS KEY_PASSWORD; do
-            if [ -z "${!name}" ]; then
-              echo "::error::Secret $name belum tersedia."
-              exit 1
-            fi
-          done
-
-          printf '%s' "$KEYSTORE_BASE64" \
-            | base64 --decode \
-            > "$RUNNER_TEMP/usaho-release.jks"
-
-          test -s "$RUNNER_TEMP/usaho-release.jks"
-
-          echo "KEYSTORE_FILE=$RUNNER_TEMP/usaho-release.jks" \
-            >> "$GITHUB_ENV"
-
-      - name: Build Release APK
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd "$PROJECT_DIR"
-
-          if [ -f ./gradlew ]; then
-            chmod +x ./gradlew
-            ./gradlew :app:clean :app:assembleRelease \
-              --no-daemon --stacktrace
-          else
-            gradle :app:clean :app:assembleRelease \
-              --no-daemon --stacktrace
-          fi
-
-      - name: Sign and verify APK
-        shell: bash
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.TOKOKU_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.TOKOKU_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.TOKOKU_KEY_PASSWORD }}
-        run: |
-          set -euo pipefail
-
-          TOOLS="$ANDROID_HOME/build-tools/35.0.0"
-          APK_DIR="$PROJECT_DIR/app/build/outputs/apk/release"
-
-          APK="$(find "$APK_DIR" -maxdepth 1 -type f \
-            -name '*.apk' -print -quit)"
-
-          if [ -z "$APK" ]; then
-            echo "::error::APK release tidak ditemukan."
+          if [ -z "${TOKOKU_KEYSTORE_BASE64:-}" ] || \
+             [ -z "${TOKOKU_KEYSTORE_PASSWORD:-}" ] || \
+             [ -z "${TOKOKU_KEY_ALIAS:-}" ]; then
+            echo "::error::Signing secrets belum lengkap. Build dihentikan agar APK tidak menggunakan kunci berbeda."
             exit 1
           fi
 
-          mkdir -p "$GITHUB_WORKSPACE/apk-output"
+          printf '%s' "$TOKOKU_KEYSTORE_BASE64" \
+            | base64 --decode > "$RUNNER_TEMP/usaho-den-permanent.jks"
 
-          "$TOOLS/zipalign" -f -p 4 \
-            "$APK" "$RUNNER_TEMP/usaho-aligned.apk"
+          keytool -list \
+            -keystore "$RUNNER_TEMP/usaho-den-permanent.jks" \
+            -storepass "$TOKOKU_KEYSTORE_PASSWORD" \
+            -alias "$TOKOKU_KEY_ALIAS" >/dev/null
 
-          "$TOOLS/apksigner" sign \
-            --ks "$KEYSTORE_FILE" \
-            --ks-key-alias "$KEY_ALIAS" \
-            --ks-pass env:KEYSTORE_PASSWORD \
-            --key-pass env:KEY_PASSWORD \
-            --out "$GITHUB_WORKSPACE/apk-output/UsahoDen.apk" \
-            "$RUNNER_TEMP/usaho-aligned.apk"
+          {
+            echo "TOKOKU_KEYSTORE_FILE=$RUNNER_TEMP/usaho-den-permanent.jks"
+            echo "TOKOKU_KEYSTORE_PASSWORD=$TOKOKU_KEYSTORE_PASSWORD"
+            echo "TOKOKU_KEY_ALIAS=$TOKOKU_KEY_ALIAS"
+            echo "TOKOKU_KEY_PASSWORD=${TOKOKU_KEY_PASSWORD:-$TOKOKU_KEYSTORE_PASSWORD}"
+          } >> "$GITHUB_ENV"
 
-          "$TOOLS/apksigner" verify \
-            --verbose --print-certs \
-            "$GITHUB_WORKSPACE/apk-output/UsahoDen.apk"
+      - name: Build signed release APK
+        shell: bash
+        run: |
+          set -euo pipefail
 
-          test -s "$GITHUB_WORKSPACE/apk-output/UsahoDen.apk"
+          gradle :app:clean :app:assembleRelease --no-daemon --stacktrace
 
-      - name: Upload UsahoDen APK
+          APK="app/build/outputs/apk/release/app-release.apk"
+          test -s "$APK" || {
+            echo "::error::APK release tidak berhasil dibuat."
+            exit 1
+          }
+
+      - name: Verify APK signature, package, and version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          APK="app/build/outputs/apk/release/app-release.apk"
+          TOOLS="$ANDROID_HOME/build-tools/35.0.0"
+
+          "$TOOLS/apksigner" verify --verbose "$APK"
+
+          "$TOOLS/aapt" dump badging "$APK" \
+            | tee "$RUNNER_TEMP/badging.txt"
+
+          grep -q "package: name='com.tokoku.app'" "$RUNNER_TEMP/badging.txt"
+          grep -q "versionCode='83'" "$RUNNER_TEMP/badging.txt"
+          grep -q "versionName='3.22.15-riwayat-pelanggan-header-v83'" "$RUNNER_TEMP/badging.txt"
+
+          mkdir -p output
+          cp "$APK" output/UsahoDen-v83-Riwayat-Pelanggan-Header-FIX.apk
+
+          echo "APK v83 lolos pemeriksaan identitas."
+
+      - name: Upload signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-Login-Tap-Fix
-          path: apk-output/UsahoDen.apk
+          name: UsahoDen-v83-Riwayat-Pelanggan-Header-FIX-Signed
+          path: output/UsahoDen-v83-Riwayat-Pelanggan-Header-FIX.apk
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 30
