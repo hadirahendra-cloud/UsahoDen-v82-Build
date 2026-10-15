@@ -5,8 +5,7 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - '**.yml'
-      - '**.yaml'
+      - '.github/workflows/build-v82.yml'
       - '*.zip'
 
 permissions:
@@ -37,37 +36,13 @@ jobs:
           set -euo pipefail
 
           SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
-
-          if [ ! -d "$SDK" ]; then
-            echo "::error::Android SDK tidak ditemukan."
-            exit 1
-          fi
-
           echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
           echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
-          echo "$SDK/platform-tools" >> "$GITHUB_PATH"
 
-          SDKMANAGER=""
-          for candidate in \
-            "$SDK/cmdline-tools/latest/bin/sdkmanager" \
-            "$SDK/cmdline-tools/16.0/bin/sdkmanager" \
-            "$SDK/cmdline-tools/15.0/bin/sdkmanager" \
-            "$SDK/tools/bin/sdkmanager"; do
-            if [ -x "$candidate" ]; then
-              SDKMANAGER="$candidate"
-              break
-            fi
-          done
-
-          if [ -z "$SDKMANAGER" ]; then
+          if [ ! -x "$SDK/build-tools/35.0.0/apksigner" ]; then
             SDKMANAGER="$(find "$SDK/cmdline-tools" \
               -type f -path '*/bin/sdkmanager' \
               -print -quit 2>/dev/null || true)"
-          fi
-
-          if [ ! -d "$SDK/platforms/android-35" ] || \
-             [ ! -x "$SDK/build-tools/35.0.0/apksigner" ] || \
-             [ ! -x "$SDK/build-tools/35.0.0/zipalign" ]; then
 
             if [ -z "$SDKMANAGER" ]; then
               echo "::error::sdkmanager tidak ditemukan."
@@ -85,10 +60,8 @@ jobs:
           fi
 
           test -d "$SDK/platforms/android-35"
-          test -x "$SDK/build-tools/35.0.0/apksigner"
           test -x "$SDK/build-tools/35.0.0/zipalign"
-
-          echo "Android SDK siap."
+          test -x "$SDK/build-tools/35.0.0/apksigner"
 
       - name: Extract fixed login source ZIP
         shell: bash
@@ -97,8 +70,12 @@ jobs:
 
           ZIP="UsahoDen-v82-Login-Tap-Fix-Source.zip"
 
+          echo "Daftar ZIP di repository:"
+          find . -maxdepth 2 -type f -name '*.zip' -print
+
           if [ ! -f "$ZIP" ]; then
-            echo "::error::ZIP perbaikan login tidak ditemukan di root repository."
+            echo "::error::File $ZIP belum ada di root repository."
+            echo "Upload ZIP ke folder utama GitHub terlebih dahulu."
             exit 1
           fi
 
@@ -109,7 +86,6 @@ jobs:
 
           while IFS= read -r file; do
             dir="$(dirname "$file")"
-
             if [ -f "$dir/app/build.gradle" ] || \
                [ -f "$dir/app/build.gradle.kts" ]; then
               PROJECT="$dir"
@@ -123,7 +99,7 @@ jobs:
           )
 
           if [ -z "$PROJECT" ]; then
-            echo "::error::Proyek Android tidak ditemukan di ZIP."
+            echo "::error::Proyek Android tidak ditemukan."
             exit 1
           fi
 
@@ -134,11 +110,13 @@ jobs:
             exit 1
           fi
 
-          grep -q 'loginSubmitButton' "$HTML"
-          grep -q 'usahoden-login-tap-fix-script-v1' "$HTML"
+          grep -q 'loginSubmitButton' "$HTML" || {
+            echo "::error::Perbaikan tombol login tidak ditemukan."
+            exit 1
+          }
 
           echo "PROJECT_DIR=$PROJECT" >> "$GITHUB_ENV"
-          echo "Sumber perbaikan login berhasil diverifikasi."
+          echo "Sumber login fix ditemukan."
 
       - name: Verify permanent keystore
         shell: bash
@@ -159,14 +137,13 @@ jobs:
           done
 
           printf '%s' "$KEYSTORE_BASE64" \
-            | base64 --decode > "$RUNNER_TEMP/usaho-release.jks"
+            | base64 --decode \
+            > "$RUNNER_TEMP/usaho-release.jks"
 
           test -s "$RUNNER_TEMP/usaho-release.jks"
 
           echo "KEYSTORE_FILE=$RUNNER_TEMP/usaho-release.jks" \
             >> "$GITHUB_ENV"
-
-          echo "Keystore berhasil disiapkan."
 
       - name: Build Release APK
         shell: bash
@@ -216,11 +193,11 @@ jobs:
             --out "$GITHUB_WORKSPACE/apk-output/UsahoDen.apk" \
             "$RUNNER_TEMP/usaho-aligned.apk"
 
-          "$TOOLS/apksigner" verify --verbose --print-certs \
+          "$TOOLS/apksigner" verify \
+            --verbose --print-certs \
             "$GITHUB_WORKSPACE/apk-output/UsahoDen.apk"
 
           test -s "$GITHUB_WORKSPACE/apk-output/UsahoDen.apk"
-          echo "APK berhasil ditandatangani dan diverifikasi."
 
       - name: Upload UsahoDen APK
         uses: actions/upload-artifact@v4
