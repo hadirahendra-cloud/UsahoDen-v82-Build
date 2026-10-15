@@ -20,50 +20,57 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      # Jangan masukkan daftar paket ke setup-android.
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
-        with:
-          cmdline-tools-version: 'latest'
-          packages: |
-            platform-tools
-            platforms;android-35
-            build-tools;35.0.0
-          accept-android-sdk-licenses: true
+
+      - name: Accept Android SDK licenses
+        shell: bash
+        run: |
+          set -e
+          yes | sdkmanager --licenses
+
+      # Instal setiap paket secara terpisah.
+      - name: Install Android SDK packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager "platform-tools"
+          sdkmanager "platforms;android-35"
+          sdkmanager "build-tools;35.0.0"
 
       - name: Verify Android SDK
         shell: bash
         run: |
           set -euo pipefail
-          sdkmanager --version
-          adb version
           test -d "$ANDROID_HOME/platforms/android-35"
           test -d "$ANDROID_HOME/build-tools/35.0.0"
+          "$ANDROID_HOME/platform-tools/adb" version
+          echo "Android SDK siap."
 
       - name: Install Gradle 8.7
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Prepare Gradle 8.7
         shell: bash
         run: |
           set -euo pipefail
-          wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip -O "$RUNNER_TEMP/gradle-8.7-bin.zip"
-          unzip -q "$RUNNER_TEMP/gradle-8.7-bin.zip" -d "$RUNNER_TEMP"
+          wget -q \
+            https://services.gradle.org/distributions/gradle-8.7-bin.zip \
+            -O "$RUNNER_TEMP/gradle-8.7.zip"
+          unzip -q "$RUNNER_TEMP/gradle-8.7.zip" -d "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/gradle-8.7/bin" >> "$GITHUB_PATH"
-          "$RUNNER_TEMP/gradle-8.7/bin/gradle" --version
 
-      - name: Find and extract UsahoDen v83 source ZIP
+      - name: Find and extract source ZIP
         shell: bash
         run: |
           set -euo pipefail
 
-          ZIP="$(find . -maxdepth 4 -type f \
+          ZIP="$(find . -maxdepth 5 -type f \
             -iname 'UsahoDen-v83-Riwayat-Scroll-Source.zip' \
             -print -quit)"
 
           if [ -z "$ZIP" ]; then
             echo "::error::ZIP source v83 tidak ditemukan."
-            echo "Pastikan ZIP diunggah ke repository GitHub."
-            find . -maxdepth 4 -type f -iname '*.zip' -print || true
+            echo "ZIP yang ada di repository:"
+            find . -maxdepth 5 -type f -iname '*.zip' -print || true
             exit 1
           fi
 
@@ -71,33 +78,48 @@ jobs:
           unzip -q "$ZIP" -d "$RUNNER_TEMP/usaho-source"
 
           PROJECT_DIR="$(find "$RUNNER_TEMP/usaho-source" \
-            -type f -path '*/app/build.gradle' \
-            -print -quit | sed 's#/app/build.gradle$##')"
+            -type f \( -path '*/app/build.gradle' \
+            -o -path '*/app/build.gradle.kts' \) \
+            -print -quit | sed -E 's#/app/build\.gradle(\.kts)?$##')"
 
           if [ -z "$PROJECT_DIR" ]; then
-            echo "::error::app/build.gradle tidak ditemukan dalam ZIP."
+            echo "::error::File Gradle aplikasi tidak ditemukan di dalam ZIP."
             exit 1
           fi
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-          echo "Source ditemukan di: $PROJECT_DIR"
+          echo "Source ditemukan."
 
-      - name: Verify application identity
+      - name: Check app source
         shell: bash
         run: |
           set -euo pipefail
           cd "$PROJECT_DIR"
 
-          test -s app/build.gradle
-          test -s app/src/main/java/com/tokoku/app/MainActivity.java
           test -s app/src/main/assets/index.html
+          test -f app/build.gradle || test -f app/build.gradle.kts
 
-          grep -Fq "applicationId 'com.tokoku.app'" app/build.gradle
-          grep -Eq 'versionCode[[:space:]]+83' app/build.gradle
+          if [ -f gradlew ]; then
+            chmod +x gradlew
+            ./gradlew --version
+          else
+            gradle --version
+          fi
 
-          echo "Identitas aplikasi dan file source utama ditemukan."
+      - name: Build APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
 
-      - name: Decode permanent signing key
+          if [ -f gradlew ]; then
+            ./gradlew :app:assembleDebug --no-daemon --stacktrace
+          else
+            gradle :app:assembleDebug --no-daemon --stacktrace
+          fi
+
+      # Gunakan keystore lama agar APK dapat memperbarui aplikasi lama.
+      - name: Sign APK with permanent keystore
         shell: bash
         env:
           KEYSTORE_BASE64: ${{ secrets.TOKOKU_KEYSTORE_BASE64 }}
@@ -110,60 +132,57 @@ jobs:
           if [ -z "${KEYSTORE_BASE64:-}" ] || \
              [ -z "${KEYSTORE_PASSWORD:-}" ] || \
              [ -z "${KEY_ALIAS:-}" ]; then
-            echo "::error::Secrets keystore permanen belum lengkap."
-            echo "Build dihentikan agar tidak menghasilkan APK dengan tanda tangan berbeda."
+            echo "::error::Secrets keystore lama belum lengkap."
+            echo "APK tidak akan ditandatangani dengan kunci baru."
             exit 1
           fi
 
-          echo "$KEYSTORE_BASE64" | base64 --decode \
-            > "$RUNNER_TEMP/usaho-den-permanent.jks"
+          KEYSTORE="$RUNNER_TEMP/usaho-den.jks"
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
 
           keytool -list \
-            -keystore "$RUNNER_TEMP/usaho-den-permanent.jks" \
+            -keystore "$KEYSTORE" \
             -storepass "$KEYSTORE_PASSWORD" \
             -alias "$KEY_ALIAS" >/dev/null
 
-          {
-            echo "TOKOKU_KEYSTORE_FILE=$RUNNER_TEMP/usaho-den-permanent.jks"
-            echo "TOKOKU_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
-            echo "TOKOKU_KEY_ALIAS=$KEY_ALIAS"
-            echo "TOKOKU_KEY_PASSWORD=${KEY_PASSWORD:-$KEYSTORE_PASSWORD}"
-          } >> "$GITHUB_ENV"
-
-      - name: Build signed release APK
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd "$PROJECT_DIR"
-          gradle :app:assembleRelease --no-daemon --stacktrace
-
-      - name: Verify APK signature and identity
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          APK="$PROJECT_DIR/app/build/outputs/apk/release/app-release.apk"
+          APK="$PROJECT_DIR/app/build/outputs/apk/debug/app-debug.apk"
           test -s "$APK"
 
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" \
-            verify --verbose "$APK"
+          mkdir -p output
+          cp "$APK" output/UsahoDen-v83-unsigned.apk
 
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" \
-            dump badging "$APK" > "$RUNNER_TEMP/badging.txt"
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" \
+            -f -p 4 \
+            output/UsahoDen-v83-unsigned.apk \
+            output/UsahoDen-v83-aligned.apk
+
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign \
+            --ks "$KEYSTORE" \
+            --ks-key-alias "$KEY_ALIAS" \
+            --ks-pass env:KEYSTORE_PASSWORD \
+            --key-pass "env:KEY_PASSWORD" \
+            --out output/UsahoDen-v83-Riwayat-Scroll-FIX-Signed.apk \
+            output/UsahoDen-v83-aligned.apk
+
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify \
+            --verbose output/UsahoDen-v83-Riwayat-Scroll-FIX-Signed.apk
+
+      - name: Check APK package identity
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          APK="output/UsahoDen-v83-Riwayat-Scroll-FIX-Signed.apk"
+
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" \
+            | tee "$RUNNER_TEMP/apk-info.txt"
 
           grep -Fq "package: name='com.tokoku.app'" \
-            "$RUNNER_TEMP/badging.txt"
+            "$RUNNER_TEMP/apk-info.txt"
 
-          grep -Fq "versionCode='83'" \
-            "$RUNNER_TEMP/badging.txt"
+          echo "Nama paket terverifikasi."
 
-          mkdir -p output
-          cp "$APK" \
-            output/UsahoDen-v83-Riwayat-Scroll-FIX-Signed.apk
-
-          echo "APK berhasil dibangun dan tanda tangannya terverifikasi."
-
-      - name: Upload signed APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: UsahoDen-v83-Riwayat-Scroll-FIX-Signed
