@@ -1,4 +1,4 @@
-name: Build UsahoDen v88 Akses Cepat Tombol Kembali FIX
+name: Build UsahoDen v89 Riwayat Pelanggan Umum FIX
 
 on:
   workflow_dispatch:
@@ -28,7 +28,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" \
             -type f -name sdkmanager -print -quit)"
 
@@ -50,7 +49,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "platform-tools"
           "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "platforms;android-35"
           "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "build-tools;35.0.0"
@@ -67,11 +65,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           wget -q \
             https://services.gradle.org/distributions/gradle-8.7-bin.zip \
             -O "$RUNNER_TEMP/gradle.zip"
-
           unzip -q "$RUNNER_TEMP/gradle.zip" -d "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/gradle-8.7/bin" >> "$GITHUB_PATH"
 
@@ -81,11 +77,11 @@ jobs:
           set -euo pipefail
 
           ZIP="$(find . -maxdepth 5 -type f \
-            -iname 'UsahoDen-v88-Akses-Cepat-Tombol-Kembali-FIX-Source.zip' \
+            -iname 'UsahoDen-v89-Riwayat-Pelanggan-Umum-Source.zip' \
             -print -quit)"
 
           if [ -z "$ZIP" ]; then
-            echo "::error::ZIP source v88 tidak ditemukan."
+            echo "::error::ZIP source v89 tidak ditemukan."
             find . -maxdepth 5 -type f -iname '*.zip' -print || true
             exit 1
           fi
@@ -143,11 +139,11 @@ jobs:
           cd "$PROJECT_DIR"
 
           grep -Fq "applicationId 'com.tokoku.app'" app/build.gradle
-          grep -Eq 'versionCode[[:space:]]+88' app/build.gradle
+          grep -Eq 'versionCode[[:space:]]+89' app/build.gradle
 
           gradle :app:assembleRelease --no-daemon --stacktrace
 
-      - name: Verify APK signature and package
+      - name: Verify APK signature and identity
         shell: bash
         run: |
           set -euo pipefail
@@ -162,16 +158,16 @@ jobs:
             dump badging "$APK" | tee "$RUNNER_TEMP/apk-info.txt"
 
           grep -Fq "package: name='com.tokoku.app'" "$RUNNER_TEMP/apk-info.txt"
-          grep -Fq "versionCode='88'" "$RUNNER_TEMP/apk-info.txt"
+          grep -Fq "versionCode='89'" "$RUNNER_TEMP/apk-info.txt"
 
           mkdir -p output
           cp "$APK" \
-            output/UsahoDen-v88-Akses-Cepat-Tombol-Kembali-FIX-Signed.apk
+            output/UsahoDen-v89-Riwayat-Pelanggan-Umum-FIX-Signed.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v88-Akses-Cepat-Tombol-Kembali-FIX-Signed
-          path: output/UsahoDen-v88-Akses-Cepat-Tombol-Kembali-FIX-Signed.apk
+          name: UsahoDen-v89-Riwayat-Pelanggan-Umum-FIX-Signed
+          path: output/UsahoDen-v89-Riwayat-Pelanggan-Umum-FIX-Signed.apk
           if-no-files-found: error
           retention-days: 30
