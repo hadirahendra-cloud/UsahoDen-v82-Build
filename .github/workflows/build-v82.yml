@@ -1,5 +1,5 @@
 
-name: Build UsahoDen v93 Jarak Gambar Produk FIX
+name: Build UsahoDen v94 Fix Tulisan N
 
 on:
   workflow_dispatch:
@@ -65,13 +65,13 @@ jobs:
           unzip -q "$RUNNER_TEMP/gradle.zip" -d "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/gradle-8.7/bin" >> "$GITHUB_PATH"
 
-      - name: Find and extract source ZIP
+      - name: Extract source ZIP
         shell: bash
         run: |
           set -euo pipefail
-          ZIP="$(find . -maxdepth 5 -type f -iname 'UsahoDen-v93-Perbaikan-Jarak-Gambar-Source.zip' -print -quit)"
+          ZIP="$(find . -maxdepth 5 -type f -iname 'UsahoDen-v94-Fix-Tulisan-N-Source.zip' -print -quit)"
           if [ -z "$ZIP" ]; then
-            echo "::error::ZIP v93 tidak ditemukan di repository."
+            echo "::error::ZIP v94 tidak ditemukan."
             find . -maxdepth 5 -type f -iname '*.zip' -print || true
             exit 1
           fi
@@ -95,19 +95,14 @@ jobs:
           KEY_PASSWORD: ${{ secrets.TOKOKU_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-
           if [ -z "${KEYSTORE_BASE64:-}" ] || [ -z "${KEYSTORE_PASSWORD:-}" ] || [ -z "${KEY_ALIAS:-}" ]; then
-            echo "::error::Secrets keystore lama belum lengkap. Build dihentikan untuk melindungi kompatibilitas update."
+            echo "::error::Secrets keystore lama belum lengkap. Build dihentikan untuk menjaga kompatibilitas update."
             exit 1
           fi
 
           KEYSTORE="$RUNNER_TEMP/usahoden-existing.jks"
           echo "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
-
-          keytool -list \
-            -keystore "$KEYSTORE" \
-            -storepass "$KEYSTORE_PASSWORD" \
-            -alias "$KEY_ALIAS" >/dev/null
+          keytool -list -keystore "$KEYSTORE" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
 
           {
             echo "TOKOKU_KEYSTORE_FILE=$KEYSTORE"
@@ -116,40 +111,37 @@ jobs:
             echo "TOKOKU_KEY_PASSWORD=${KEY_PASSWORD:-$KEYSTORE_PASSWORD}"
           } >> "$GITHUB_ENV"
 
-      - name: Check identity and build release APK
+      - name: Verify identity and build release APK
         shell: bash
         run: |
           set -euo pipefail
           cd "$PROJECT_DIR"
 
           grep -Fq "applicationId 'com.tokoku.app'" app/build.gradle
-          grep -Eq 'versionCode[[:space:]]+93' app/build.gradle
+          grep -Eq 'versionCode[[:space:]]+94' app/build.gradle
 
           gradle :app:assembleRelease --no-daemon --stacktrace
 
-      - name: Verify APK signature and package
+      - name: Verify APK
         shell: bash
         run: |
           set -euo pipefail
-
           APK="$PROJECT_DIR/app/build/outputs/apk/release/app-release.apk"
           test -s "$APK"
 
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
-
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" \
-            | tee "$RUNNER_TEMP/apk-info.txt"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee "$RUNNER_TEMP/apk-info.txt"
 
           grep -Fq "package: name='com.tokoku.app'" "$RUNNER_TEMP/apk-info.txt"
-          grep -Fq "versionCode='93'" "$RUNNER_TEMP/apk-info.txt"
+          grep -Fq "versionCode='94'" "$RUNNER_TEMP/apk-info.txt"
 
           mkdir -p output
-          cp "$APK" output/UsahoDen-v93-Perbaikan-Jarak-Gambar-Signed.apk
+          cp "$APK" output/UsahoDen-v94-Fix-Tulisan-N-Signed.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v93-Perbaikan-Jarak-Gambar-Signed
-          path: output/UsahoDen-v93-Perbaikan-Jarak-Gambar-Signed.apk
+          name: UsahoDen-v94-Fix-Tulisan-N-Signed
+          path: output/UsahoDen-v94-Fix-Tulisan-N-Signed.apk
           if-no-files-found: error
           retention-days: 30
