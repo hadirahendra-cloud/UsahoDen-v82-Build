@@ -1,5 +1,5 @@
 
-name: Build UsahoDen v90 Laporan Keuangan FIX
+name: Build UsahoDen v91 Satuan Produk FIX
 
 on:
   workflow_dispatch:
@@ -30,7 +30,7 @@ jobs:
           set -euo pipefail
           SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
           if [ -z "$SDKMANAGER" ]; then
-            echo "::error::sdkmanager tidak ditemukan pada runner."
+            echo "::error::sdkmanager tidak ditemukan."
             find /usr/local/lib/android /opt -type f -name sdkmanager -print 2>/dev/null | head -20 || true
             exit 1
           fi
@@ -70,9 +70,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ZIP="$(find . -maxdepth 5 -type f -iname 'UsahoDen-v90-Laporan-Keuangan-Produk-Source.zip' -print -quit)"
+          ZIP="$(find . -maxdepth 5 -type f -iname 'UsahoDen-v91-Satuan-Produk-Kg-Bal-Source.zip' -print -quit)"
           if [ -z "$ZIP" ]; then
-            echo "::error::Source ZIP v90 tidak ditemukan di repository."
+            echo "::error::ZIP sumber v91 tidak ditemukan."
             find . -maxdepth 5 -type f -iname '*.zip' -print || true
             exit 1
           fi
@@ -80,7 +80,7 @@ jobs:
           unzip -q "$ZIP" -d "$RUNNER_TEMP/usaho-source"
           PROJECT_DIR="$(find "$RUNNER_TEMP/usaho-source" -type f -path '*/app/build.gradle' -print -quit | sed 's#/app/build.gradle$##')"
           if [ -z "$PROJECT_DIR" ]; then
-            echo "::error::app/build.gradle tidak ditemukan di ZIP."
+            echo "::error::app/build.gradle tidak ditemukan dalam ZIP."
             exit 1
           fi
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
@@ -114,7 +114,7 @@ jobs:
           set -euo pipefail
           cd "$PROJECT_DIR"
           grep -Fq "applicationId 'com.tokoku.app'" app/build.gradle
-          grep -Eq 'versionCode[[:space:]]+90' app/build.gradle
+          grep -Eq 'versionCode[[:space:]]+91' app/build.gradle
           gradle :app:assembleRelease --no-daemon --stacktrace
 
       - name: Verify APK signature and package
@@ -126,14 +126,14 @@ jobs:
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee "$RUNNER_TEMP/apk-info.txt"
           grep -Fq "package: name='com.tokoku.app'" "$RUNNER_TEMP/apk-info.txt"
-          grep -Fq "versionCode='90'" "$RUNNER_TEMP/apk-info.txt"
+          grep -Fq "versionCode='91'" "$RUNNER_TEMP/apk-info.txt"
           mkdir -p output
-          cp "$APK" output/UsahoDen-v90-Laporan-Keuangan-Produk-Signed.apk
+          cp "$APK" output/UsahoDen-v91-Satuan-Produk-Kg-Bal-Signed.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v90-Laporan-Keuangan-Produk-Signed
-          path: output/UsahoDen-v90-Laporan-Keuangan-Produk-Signed.apk
+          name: UsahoDen-v91-Satuan-Produk-Kg-Bal-Signed
+          path: output/UsahoDen-v91-Satuan-Produk-Kg-Bal-Signed.apk
           if-no-files-found: error
           retention-days: 30
