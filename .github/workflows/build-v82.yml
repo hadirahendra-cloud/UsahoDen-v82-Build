@@ -98,7 +98,7 @@ jobs:
           ZIP="UsahoDen-v82-Riwayat-Sticky-Compact-Source.zip"
 
           if [ ! -f "$ZIP" ]; then
-            echo "::error::ZIP sumber v82 tidak ditemukan."
+            echo "::error::ZIP sumber v82 tidak ditemukan di root repository."
             exit 1
           fi
 
@@ -130,7 +130,7 @@ jobs:
           echo "PROJECT_DIR=$PROJECT" >> "$GITHUB_ENV"
           echo "Proyek ditemukan: $PROJECT"
 
-      - name: Fix posisi daftar pelanggan saja
+      - name: Geser kartu pelanggan pertama saja
         shell: bash
         run: |
           set -euo pipefail
@@ -149,64 +149,45 @@ jobs:
 
           path = Path(sys.argv[1])
           html = path.read_text(encoding="utf-8")
-          marker = "usahoden-customer-list-position-fix"
 
-          # Hapus patch posisi lama jika ada, tanpa mengubah header.
+          # Hanya mengatur margin kartu pelanggan pertama.
+          # Tidak mengubah header maupun JavaScript.
+          rule = """
+          /* UsahoDen: posisi kartu pelanggan pertama */
+          #history .history-customer:first-child {
+            margin-top: 100px !important;
+          }
+          """
+
+          # Hindari memasukkan aturan yang sama berulang kali.
           html = re.sub(
-              r'<!-- ' + marker + r' -->.*?<!-- /' + marker + r' -->',
+              r'/\\* UsahoDen: posisi kartu pelanggan pertama \\*/'
+              r'\\s*#history\\s+\\.history-customer:first-child\\s*'
+              r'\\{[^}]*\\}',
               '',
               html,
               flags=re.S
           )
 
-          rules = """
-          /* Jarak konten; ukuran header tidak diubah */
-          main {
-            padding-top: 18px !important;
-          }
+          match = re.search(r"</style\\s*>", html, re.I)
 
-          #history {
-            padding-top: 12px !important;
-          }
-
-          #history .history-customer:first-child {
-            margin-top: 8px !important;
-          }
-          """
-
-          # Sumber dapat berupa HTML penuh atau fragmen HTML.
-          # Jangan mewajibkan tag </head>.
-          style_close = re.search(r"</style\\s*>", html, re.I)
-
-          if style_close:
-              # Masukkan aturan ke blok CSS yang sudah ada.
-              pos = style_close.start()
-              html = html[:pos] + "\n" + rules + "\n" + html[pos:]
+          if not match:
+              # Bila tidak ada tag style, tambahkan style baru
+              # di awal dokumen; tidak memerlukan tag </head>.
+              html = "<style>\n" + rule + "\n</style>\n" + html
           else:
-              # Jika tidak ada blok style, buat blok baru.
-              style_block = (
-                  '<style id="' + marker + '">\n'
-                  + rules
-                  + '\n</style>\n'
-              )
-
-              body_open = re.search(r"<body\\b[^>]*>", html, re.I)
-              if body_open:
-                  pos = body_open.start()
-                  html = html[:pos] + style_block + html[pos:]
-              else:
-                  html = style_block + html
+              # Sisipkan aturan ke CSS yang sudah ada.
+              pos = match.start()
+              html = html[:pos] + "\n" + rule + "\n" + html[pos:]
 
           path.write_text(html, encoding="utf-8")
 
           check = path.read_text(encoding="utf-8")
-          if "padding-top: 18px" not in check or \
-             "#history .history-customer:first-child" not in check:
-              raise SystemExit("ERROR: verifikasi CSS posisi gagal.")
+          if "margin-top: 100px !important" not in check:
+              raise SystemExit("ERROR: aturan posisi kartu gagal diverifikasi.")
 
-          print("Patch posisi daftar pelanggan berhasil.")
-          print("Tidak membutuhkan tag </head>.")
-          print("Ukuran header dan JavaScript login tidak diubah.")
+          print("Margin kartu pelanggan pertama: 100px.")
+          print("Header dan JavaScript tidak diubah.")
           PY
 
       - name: Verify permanent keystore
