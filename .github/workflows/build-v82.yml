@@ -29,30 +29,31 @@ jobs:
         with:
           gradle-version: "8.7"
 
-      - name: Setup Android SDK - PATOKAN
+      # PATOKAN SDK: jangan memasukkan daftar packages di action ini.
+      - name: Setup Android SDK
         uses: android-actions/setup-android@v3
-        with:
-          cmdline-tools-version: "11076708"
-          accept-android-sdk-licenses: true
-          packages: |
-            platform-tools
-            platforms;android-35
-            build-tools;35.0.0
 
-      - name: Verify Android SDK
+      - name: Accept Android SDK Licenses
+        shell: bash
+        run: |
+          set -e
+          yes | sdkmanager --licenses
+
+      # PENTING: setiap paket merupakan argumen terpisah.
+      - name: Install Android SDK Packages
         shell: bash
         run: |
           set -euo pipefail
+
+          sdkmanager "platform-tools"
+          sdkmanager "platforms;android-35"
+          sdkmanager "build-tools;35.0.0"
 
           test -x "$ANDROID_HOME/platform-tools/adb"
           test -d "$ANDROID_HOME/platforms/android-35"
           test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner"
 
-          echo "Java:"
-          java -version
-
-          echo "Android SDK:"
-          sdkmanager --list_installed
+          echo "PATOKAN SDK berhasil diperiksa."
 
       - name: Find and Extract Source ZIP
         shell: bash
@@ -64,7 +65,7 @@ jobs:
             -print -quit)"
 
           if [ -z "$ZIP_FILE" ]; then
-            echo "ERROR: ZIP source v101 tidak ditemukan di repository."
+            echo "ERROR: ZIP source v101 tidak ditemukan."
             exit 1
           fi
 
@@ -103,7 +104,8 @@ jobs:
           grep -Fq "applicationId 'com.tokoku.app'" app/build.gradle
           grep -Eq 'versionCode[[:space:]]+101' app/build.gradle
 
-          echo "Package dan versionCode sesuai."
+          echo "Package: com.tokoku.app"
+          echo "VersionCode: 101"
 
       - name: Prepare Existing Signing Keystore
         shell: bash
@@ -120,12 +122,11 @@ jobs:
              [ -z "$KEY_ALIAS" ]; then
             echo "ERROR: Secrets keystore belum lengkap."
             echo "Build dihentikan agar tidak menghasilkan APK"
-            echo "yang tidak kompatibel dengan aplikasi lama."
+            echo "yang tidak dapat memperbarui aplikasi lama."
             exit 1
           fi
 
           KEYSTORE_FILE="$RUNNER_TEMP/usahoden-release.jks"
-
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_FILE"
 
           test -s "$KEYSTORE_FILE"
@@ -137,8 +138,8 @@ jobs:
 
           {
             echo "TOKOKU_KEYSTORE_FILE=$KEYSTORE_FILE"
-            echo "TOKOKU_KEY_ALIAS=$KEY_ALIAS"
             echo "TOKOKU_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
+            echo "TOKOKU_KEY_ALIAS=$KEY_ALIAS"
             if [ -n "$KEY_PASSWORD" ]; then
               echo "TOKOKU_KEY_PASSWORD=$KEY_PASSWORD"
             else
@@ -183,7 +184,7 @@ jobs:
           cp "$APK" \
             "$GITHUB_WORKSPACE/output/UsahoDen-v101-Header-Compact.apk"
 
-          echo "APK Release dan tanda tangannya berhasil diperiksa."
+          echo "APK dan tanda tangan berhasil diperiksa."
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
