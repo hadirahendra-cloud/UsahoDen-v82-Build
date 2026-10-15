@@ -1,11 +1,7 @@
-name: Build UsahoDen v101 Header Compact FIX SDK
+name: Build UsahoDen v101 Header Compact SDK FIX
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - "UsahoDen-v101-Header-Compact-Login-Preserved-Source.zip"
-      - ".github/workflows/build-usahoden-v101.yml"
 
 permissions:
   contents: read
@@ -29,18 +25,16 @@ jobs:
         with:
           gradle-version: "8.7"
 
-      # PATOKAN SDK: jangan memasukkan daftar packages di action ini.
+      # PATOKAN SDK: v4 dan tanpa paket default.
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+        with:
+          packages: ''
+          accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: false
 
-      - name: Accept Android SDK Licenses
-        shell: bash
-        run: |
-          set -e
-          yes | sdkmanager --licenses
-
-      # PENTING: setiap paket merupakan argumen terpisah.
-      - name: Install Android SDK Packages
+      # Instal satu per satu agar tidak terbaca sebagai satu paket.
+      - name: Install Android SDK 35
         shell: bash
         run: |
           set -euo pipefail
@@ -53,7 +47,7 @@ jobs:
           test -d "$ANDROID_HOME/platforms/android-35"
           test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner"
 
-          echo "PATOKAN SDK berhasil diperiksa."
+          echo "Android SDK 35 siap."
 
       - name: Find and Extract Source ZIP
         shell: bash
@@ -93,7 +87,7 @@ jobs:
           fi
 
           echo "PROJECT_DIR=$PROJECT" >> "$GITHUB_ENV"
-          echo "Source ditemukan: $PROJECT"
+          echo "Source: $PROJECT"
 
       - name: Verify Package and Version
         shell: bash
@@ -104,8 +98,7 @@ jobs:
           grep -Fq "applicationId 'com.tokoku.app'" app/build.gradle
           grep -Eq 'versionCode[[:space:]]+101' app/build.gradle
 
-          echo "Package: com.tokoku.app"
-          echo "VersionCode: 101"
+          echo "Package dan versionCode benar."
 
       - name: Prepare Existing Signing Keystore
         shell: bash
@@ -121,13 +114,12 @@ jobs:
              [ -z "$KEYSTORE_PASSWORD" ] || \
              [ -z "$KEY_ALIAS" ]; then
             echo "ERROR: Secrets keystore belum lengkap."
-            echo "Build dihentikan agar tidak menghasilkan APK"
-            echo "yang tidak dapat memperbarui aplikasi lama."
             exit 1
           fi
 
           KEYSTORE_FILE="$RUNNER_TEMP/usahoden-release.jks"
-          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_FILE"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode \
+            > "$KEYSTORE_FILE"
 
           test -s "$KEYSTORE_FILE"
 
@@ -162,7 +154,7 @@ jobs:
             gradle :app:assembleRelease --no-daemon
           fi
 
-      - name: Verify APK Signature
+      - name: Verify and Copy APK
         shell: bash
         run: |
           set -euo pipefail
@@ -184,7 +176,7 @@ jobs:
           cp "$APK" \
             "$GITHUB_WORKSPACE/output/UsahoDen-v101-Header-Compact.apk"
 
-          echo "APK dan tanda tangan berhasil diperiksa."
+          echo "APK Release terverifikasi."
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
