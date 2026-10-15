@@ -1,5 +1,5 @@
 
-name: Build UsahoDen v101 Header Setengah
+name: Build UsahoDen v102 Logo Kiri Keluar Tengah
 
 on:
   workflow_dispatch:
@@ -33,7 +33,7 @@ jobs:
             -type f -name sdkmanager -print -quit)"
 
           if [ -z "$SDKMANAGER" ]; then
-            echo "::error::Android SDK manager tidak ditemukan."
+            echo "::error::SDK manager tidak ditemukan."
             exit 1
           fi
 
@@ -43,17 +43,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          set +o pipefail
+          set +e
           yes | "$SDKMANAGER" \
             --sdk_root="$ANDROID_HOME" --licenses
-          LICENSE_STATUS=${PIPESTATUS[1]}
-          set -o pipefail
-          if [ "$LICENSE_STATUS" -ne 0 ]; then
-            echo "::error::Penerimaan lisensi SDK gagal."
+          status=${PIPESTATUS[1]}
+          set -e
+
+          if [ "$status" -ne 0 ]; then
+            echo "::error::Lisensi Android SDK gagal."
             exit 1
           fi
 
-      - name: Install required Android SDK packages
+      - name: Install Android SDK packages
         shell: bash
         run: |
           set -euo pipefail
@@ -62,7 +63,7 @@ jobs:
             "platforms;android-35" \
             "build-tools;35.0.0"
 
-      - name: Verify Android SDK
+      - name: Verify SDK
         shell: bash
         run: |
           set -euo pipefail
@@ -81,17 +82,17 @@ jobs:
             -d "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/gradle-8.7/bin" >> "$GITHUB_PATH"
 
-      - name: Find and extract v101 source ZIP
+      - name: Extract v102 source
         shell: bash
         run: |
           set -euo pipefail
 
-          ZIP="$(find . -type f \
-            -iname 'UsahoDen-v101-Header-Setengah-Source.zip' \
+          ZIP="$(find . -maxdepth 5 -type f \
+            -iname 'UsahoDen-v102-Logo-Kiri-Keluar-Tengah-Source.zip' \
             -print -quit)"
 
           if [ -z "$ZIP" ]; then
-            echo "::error::ZIP v101 tidak ditemukan di repository."
+            echo "::error::ZIP source v102 tidak ditemukan."
             find . -type f -iname '*.zip' -print || true
             exit 1
           fi
@@ -99,33 +100,21 @@ jobs:
           mkdir -p "$RUNNER_TEMP/usaho-source"
           unzip -q "$ZIP" -d "$RUNNER_TEMP/usaho-source"
 
-          PROJECT_DIR="$(find "$RUNNER_TEMP/usaho-source" \
-            -type f -path '*/app/build.gradle' \
-            -print -quit | sed 's#/app/build.gradle$##')"
+          PROJECT_DIR="$RUNNER_TEMP/usaho-source"
 
-          if [ -z "$PROJECT_DIR" ]; then
-            echo "::error::File app/build.gradle tidak ditemukan."
+          if [ ! -f "$PROJECT_DIR/app/build.gradle" ]; then
+            PROJECT_DIR="$(find "$RUNNER_TEMP/usaho-source" \
+              -type f -path '*/app/build.gradle' \
+              -print -quit | sed 's#/app/build.gradle$##')"
+          fi
+
+          if [ -z "$PROJECT_DIR" ] || \
+             [ ! -f "$PROJECT_DIR/app/build.gradle" ]; then
+            echo "::error::Proyek Android tidak ditemukan."
             exit 1
           fi
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-
-      - name: Verify v101 source
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd "$PROJECT_DIR"
-
-          grep -Fq "applicationId 'com.tokoku.app'" \
-            app/build.gradle
-          grep -Eq 'versionCode[[:space:]]+101' \
-            app/build.gradle
-          grep -Fq "versionName '3.22.15-header-half-v101'" \
-            app/build.gradle
-
-          test -s app/src/main/assets/index.html
-
-          echo "Source v101 lolos pemeriksaan awal."
 
       - name: Decode existing signing keystore
         shell: bash
@@ -141,14 +130,13 @@ jobs:
              [ -z "${KEYSTORE_PASSWORD:-}" ] || \
              [ -z "${KEY_ALIAS:-}" ]; then
             echo "::error::Secrets keystore lama belum lengkap."
-            echo "::error::Build dihentikan untuk menghindari signature baru."
             exit 1
           fi
 
           KEYSTORE="$RUNNER_TEMP/usahoden-existing.jks"
 
-          printf '%s' "$KEYSTORE_BASE64" | base64 --decode \
-            > "$KEYSTORE"
+          printf '%s' "$KEYSTORE_BASE64" \
+            | base64 --decode > "$KEYSTORE"
 
           keytool -list \
             -keystore "$KEYSTORE" \
@@ -162,16 +150,31 @@ jobs:
             echo "TOKOKU_KEY_PASSWORD=${KEY_PASSWORD:-$KEYSTORE_PASSWORD}"
           } >> "$GITHUB_ENV"
 
-      - name: Build signed release APK
+      - name: Verify source v102
         shell: bash
         run: |
           set -euo pipefail
           cd "$PROJECT_DIR"
 
+          grep -Fq "applicationId 'com.tokoku.app'" \
+            app/build.gradle
+          grep -Eq 'versionCode[[:space:]]+102' \
+            app/build.gradle
+          grep -Fq \
+            "versionName '3.22.15-header-logo-left-v102'" \
+            app/build.gradle
+
+          test -s app/src/main/assets/index.html
+
+      - name: Build release APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
           gradle :app:assembleRelease \
             --no-daemon --stacktrace
 
-      - name: Verify APK signature and version
+      - name: Verify APK signature and package
         shell: bash
         run: |
           set -euo pipefail
@@ -188,17 +191,17 @@ jobs:
 
           grep -Fq "package: name='com.tokoku.app'" \
             "$RUNNER_TEMP/apk-info.txt"
-          grep -Fq "versionCode='101'" \
+          grep -Fq "versionCode='102'" \
             "$RUNNER_TEMP/apk-info.txt"
 
           mkdir -p output
           cp "$APK" \
-            output/UsahoDen-v101-Header-Setengah-SIGNED.apk
+            output/UsahoDen-v102-Logo-Kiri-Keluar-Tengah-SIGNED.apk
 
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v101-Header-Setengah-SIGNED
-          path: output/UsahoDen-v101-Header-Setengah-SIGNED.apk
+          name: UsahoDen-v102-Logo-Kiri-Keluar-Tengah-SIGNED
+          path: output/UsahoDen-v102-Logo-Kiri-Keluar-Tengah-SIGNED.apk
           if-no-files-found: error
           retention-days: 30
