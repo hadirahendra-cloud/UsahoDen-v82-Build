@@ -1,221 +1,59 @@
 
-name: Build UsahoDen v82 - Rollback Header Patch
-
-on:
-  workflow_dispatch:
-  push:
-    paths:
-      - '**.yml'
-      - '**.yaml'
-      - '*.zip'
-
-permissions:
-  contents: read
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Setup Gradle 8.7
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.7'
-
-      - name: Setup Android SDK
+      - name: Fix posisi daftar pelanggan saja
         shell: bash
         run: |
           set -euo pipefail
 
-          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          HTML="$PROJECT_DIR/app/src/main/assets/index.html"
 
-          if [ ! -d "$SDK" ]; then
-            echo "::error::Android SDK tidak ditemukan."
-            exit 1
-          fi
+          python3 - "$HTML" <<'PY'
+          from pathlib import Path
+          import re
+          import sys
 
-          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
-          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
-          echo "$SDK/platform-tools" >> "$GITHUB_PATH"
+          path = Path(sys.argv[1])
+          html = path.read_text(encoding="utf-8")
 
-          SDKMANAGER=""
-          for candidate in \
-            "$SDK/cmdline-tools/latest/bin/sdkmanager" \
-            "$SDK/cmdline-tools/16.0/bin/sdkmanager" \
-            "$SDK/cmdline-tools/15.0/bin/sdkmanager" \
-            "$SDK/tools/bin/sdkmanager"; do
-            if [ -x "$candidate" ]; then
-              SDKMANAGER="$candidate"
-              break
-            fi
-          done
+          marker = "usahoden-customer-list-position-fix"
 
-          if [ -z "$SDKMANAGER" ]; then
-            SDKMANAGER="$(find "$SDK/cmdline-tools" \
-              -type f -path '*/bin/sdkmanager' \
-              -print -quit 2>/dev/null || true)"
-          fi
-
-          if [ ! -d "$SDK/platforms/android-35" ] || \
-             [ ! -x "$SDK/build-tools/35.0.0/apksigner" ] || \
-             [ ! -x "$SDK/build-tools/35.0.0/zipalign" ]; then
-
-            if [ -z "$SDKMANAGER" ]; then
-              echo "::error::sdkmanager tidak ditemukan."
-              exit 1
-            fi
-
-            yes | "$SDKMANAGER" \
-              --sdk_root="$SDK" --licenses \
-              >/dev/null 2>&1 || true
-
-            "$SDKMANAGER" --sdk_root="$SDK" \
-              "platform-tools" \
-              "platforms;android-35" \
-              "build-tools;35.0.0"
-          fi
-
-          test -d "$SDK/platforms/android-35"
-          test -x "$SDK/build-tools/35.0.0/apksigner"
-          test -x "$SDK/build-tools/35.0.0/zipalign"
-
-          echo "Android SDK siap."
-
-      - name: Extract source ZIP v82
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          ZIP="UsahoDen-v82-Riwayat-Sticky-Compact-Source.zip"
-
-          if [ ! -f "$ZIP" ]; then
-            echo "::error::ZIP sumber v82 tidak ditemukan."
-            exit 1
-          fi
-
-          mkdir -p "$RUNNER_TEMP/usaho-source"
-          unzip -q "$ZIP" -d "$RUNNER_TEMP/usaho-source"
-
-          PROJECT=""
-
-          while IFS= read -r file; do
-            dir="$(dirname "$file")"
-
-            if [ -f "$dir/app/build.gradle" ] || \
-               [ -f "$dir/app/build.gradle.kts" ]; then
-              PROJECT="$dir"
-              break
-            fi
-          done < <(
-            find "$RUNNER_TEMP/usaho-source" \
-              -type f \
-              \( -name settings.gradle \
-              -o -name settings.gradle.kts \) | sort
+          # Hapus patch posisi dari build ini jika pernah ditambahkan.
+          html = re.sub(
+              r'<!-- ' + marker + r' -->.*?<!-- /' + marker + r' -->',
+              '',
+              html,
+              flags=re.S
           )
 
-          if [ -z "$PROJECT" ]; then
-            echo "::error::Proyek Android tidak ditemukan."
-            exit 1
-          fi
+          # Tambahkan jarak di awal konten, bukan mengubah ukuran header.
+          css = """
+          <!-- usahoden-customer-list-position-fix -->
+          <style id="usahoden-customer-list-position-fix">
+          main {
+            padding-top: 18px !important;
+          }
 
-          echo "PROJECT_DIR=$PROJECT" >> "$GITHUB_ENV"
-          echo "Sumber: $PROJECT"
+          #history {
+            padding-top: 12px !important;
+          }
 
-      - name: Verify permanent keystore
-        shell: bash
-        env:
-          KEYSTORE_BASE64: ${{ secrets.TOKOKU_KEYSTORE_BASE64 }}
-          KEYSTORE_PASSWORD: ${{ secrets.TOKOKU_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.TOKOKU_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.TOKOKU_KEY_PASSWORD }}
-        run: |
-          set -euo pipefail
+          #history .history-customer:first-child {
+            margin-top: 8px !important;
+          }
+          </style>
+          <!-- /usahoden-customer-list-position-fix -->
+          """
 
-          for name in KEYSTORE_BASE64 KEYSTORE_PASSWORD \
-                      KEY_ALIAS KEY_PASSWORD; do
-            if [ -z "${!name}" ]; then
-              echo "::error::Secret $name belum tersedia."
-              exit 1
-            fi
-          done
+          if not re.search(r"</head\\s*>", html, re.I):
+              raise SystemExit("ERROR: tag </head> tidak ditemukan.")
 
-          printf '%s' "$KEYSTORE_BASE64" \
-            | base64 --decode > "$RUNNER_TEMP/usaho-release.jks"
+          html = re.sub(
+              r"</head\\s*>",
+              lambda m: css + "\n" + m.group(0),
+              html,
+              count=1,
+              flags=re.I
+          )
 
-          test -s "$RUNNER_TEMP/usaho-release.jks"
-
-          echo "KEYSTORE_FILE=$RUNNER_TEMP/usaho-release.jks" \
-            >> "$GITHUB_ENV"
-
-          echo "Keystore berhasil disiapkan."
-
-      - name: Build Release APK
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd "$PROJECT_DIR"
-
-          if [ -f ./gradlew ]; then
-            chmod +x ./gradlew
-            ./gradlew :app:clean :app:assembleRelease \
-              --no-daemon --stacktrace
-          else
-            gradle :app:clean :app:assembleRelease \
-              --no-daemon --stacktrace
-          fi
-
-      - name: Sign and verify APK
-        shell: bash
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.TOKOKU_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.TOKOKU_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.TOKOKU_KEY_PASSWORD }}
-        run: |
-          set -euo pipefail
-
-          TOOLS="$ANDROID_HOME/build-tools/35.0.0"
-          APK_DIR="$PROJECT_DIR/app/build/outputs/apk/release"
-
-          APK="$(find "$APK_DIR" -maxdepth 1 -type f \
-            -name '*.apk' -print -quit)"
-
-          if [ -z "$APK" ]; then
-            echo "::error::APK release tidak ditemukan."
-            exit 1
-          fi
-
-          mkdir -p "$GITHUB_WORKSPACE/apk-output"
-
-          "$TOOLS/zipalign" -f -p 4 \
-            "$APK" "$RUNNER_TEMP/usaho-aligned.apk"
-
-          "$TOOLS/apksigner" sign \
-            --ks "$KEYSTORE_FILE" \
-            --ks-key-alias "$KEY_ALIAS" \
-            --ks-pass env:KEYSTORE_PASSWORD \
-            --key-pass env:KEY_PASSWORD \
-            --out "$GITHUB_WORKSPACE/apk-output/UsahoDen.apk" \
-            "$RUNNER_TEMP/usaho-aligned.apk"
-
-          "$TOOLS/apksigner" verify --verbose --print-certs \
-            "$GITHUB_WORKSPACE/apk-output/UsahoDen.apk"
-
-          test -s "$GITHUB_WORKSPACE/apk-output/UsahoDen.apk"
-          echo "APK berhasil ditandatangani dan diverifikasi."
-
-      - name: Upload UsahoDen APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: UsahoDen-APK
-          path: apk-output/UsahoDen.apk
-          if-no-files-found: error
-          retention-days: 14
+          path.write_text(html, encoding="utf-8")
+          print("Jarak konten ditambahkan; CSS ukuran header tidak diubah.")
+          PY
