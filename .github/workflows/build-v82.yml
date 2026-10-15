@@ -98,8 +98,7 @@ jobs:
           ZIP="UsahoDen-v82-Riwayat-Sticky-Compact-Source.zip"
 
           if [ ! -f "$ZIP" ]; then
-            echo "::error::ZIP sumber v82 tidak ditemukan di root repository."
-            echo "Pastikan nama ZIP tepat: $ZIP"
+            echo "::error::ZIP sumber v82 tidak ditemukan."
             exit 1
           fi
 
@@ -124,7 +123,7 @@ jobs:
           )
 
           if [ -z "$PROJECT" ]; then
-            echo "::error::Proyek Android tidak ditemukan di ZIP."
+            echo "::error::Proyek Android tidak ditemukan."
             exit 1
           fi
 
@@ -152,7 +151,7 @@ jobs:
           html = path.read_text(encoding="utf-8")
           marker = "usahoden-customer-list-position-fix"
 
-          # Bersihkan hanya patch posisi dari build sebelumnya.
+          # Hapus patch posisi lama jika ada, tanpa mengubah header.
           html = re.sub(
               r'<!-- ' + marker + r' -->.*?<!-- /' + marker + r' -->',
               '',
@@ -160,11 +159,8 @@ jobs:
               flags=re.S
           )
 
-          # Header tidak disentuh. Tambahkan jarak pada konten dan
-          # halaman riwayat pelanggan saja.
-          css = """
-          <!-- usahoden-customer-list-position-fix -->
-          <style id="usahoden-customer-list-position-fix">
+          rules = """
+          /* Jarak konten; ukuran header tidak diubah */
           main {
             padding-top: 18px !important;
           }
@@ -176,30 +172,41 @@ jobs:
           #history .history-customer:first-child {
             margin-top: 8px !important;
           }
-          </style>
-          <!-- /usahoden-customer-list-position-fix -->
           """
 
-          if not re.search(r"</head\\s*>", html, re.I):
-              raise SystemExit("ERROR: tag </head> tidak ditemukan.")
+          # Sumber dapat berupa HTML penuh atau fragmen HTML.
+          # Jangan mewajibkan tag </head>.
+          style_close = re.search(r"</style\\s*>", html, re.I)
 
-          html = re.sub(
-              r"</head\\s*>",
-              lambda m: css + "\n" + m.group(0),
-              html,
-              count=1,
-              flags=re.I
-          )
+          if style_close:
+              # Masukkan aturan ke blok CSS yang sudah ada.
+              pos = style_close.start()
+              html = html[:pos] + "\n" + rules + "\n" + html[pos:]
+          else:
+              # Jika tidak ada blok style, buat blok baru.
+              style_block = (
+                  '<style id="' + marker + '">\n'
+                  + rules
+                  + '\n</style>\n'
+              )
+
+              body_open = re.search(r"<body\\b[^>]*>", html, re.I)
+              if body_open:
+                  pos = body_open.start()
+                  html = html[:pos] + style_block + html[pos:]
+              else:
+                  html = style_block + html
 
           path.write_text(html, encoding="utf-8")
 
           check = path.read_text(encoding="utf-8")
-          if marker not in check:
-              raise SystemExit("ERROR: patch posisi gagal diverifikasi.")
+          if "padding-top: 18px" not in check or \
+             "#history .history-customer:first-child" not in check:
+              raise SystemExit("ERROR: verifikasi CSS posisi gagal.")
 
-          print("Berhasil: hanya jarak konten yang ditambah.")
-          print("Ukuran dan warna header tidak diubah.")
-          print("JavaScript login dan fitur transaksi tidak diubah.")
+          print("Patch posisi daftar pelanggan berhasil.")
+          print("Tidak membutuhkan tag </head>.")
+          print("Ukuran header dan JavaScript login tidak diubah.")
           PY
 
       - name: Verify permanent keystore
