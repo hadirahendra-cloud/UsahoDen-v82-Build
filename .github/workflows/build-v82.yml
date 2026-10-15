@@ -1,4 +1,5 @@
-name: Build UsahoDen v89 Riwayat Pelanggan Umum FIX
+
+name: Build UsahoDen v90 Laporan Keuangan FIX
 
 on:
   workflow_dispatch:
@@ -9,7 +10,6 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     env:
       ANDROID_HOME: /usr/local/lib/android/sdk
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
@@ -28,24 +28,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" \
-            -type f -name sdkmanager -print -quit)"
-
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
           if [ -z "$SDKMANAGER" ]; then
-            echo "::error::sdkmanager tidak ditemukan."
+            echo "::error::sdkmanager tidak ditemukan pada runner."
+            find /usr/local/lib/android /opt -type f -name sdkmanager -print 2>/dev/null | head -20 || true
             exit 1
           fi
-
           echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
 
       - name: Accept Android SDK licenses
         shell: bash
         run: |
           set -euo pipefail
-          yes | "$SDKMANAGER" \
-            --sdk_root="$ANDROID_HOME" --licenses || true
+          yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses || true
 
-      - name: Install Android SDK packages
+      - name: Install required SDK packages
         shell: bash
         run: |
           set -euo pipefail
@@ -53,7 +50,7 @@ jobs:
           "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "platforms;android-35"
           "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "build-tools;35.0.0"
 
-      - name: Verify Android SDK
+      - name: Verify SDK
         shell: bash
         run: |
           set -euo pipefail
@@ -65,9 +62,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          wget -q \
-            https://services.gradle.org/distributions/gradle-8.7-bin.zip \
-            -O "$RUNNER_TEMP/gradle.zip"
+          wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip -O "$RUNNER_TEMP/gradle.zip"
           unzip -q "$RUNNER_TEMP/gradle.zip" -d "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/gradle-8.7/bin" >> "$GITHUB_PATH"
 
@@ -75,29 +70,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
-          ZIP="$(find . -maxdepth 5 -type f \
-            -iname 'UsahoDen-v89-Riwayat-Pelanggan-Umum-Source.zip' \
-            -print -quit)"
-
+          ZIP="$(find . -maxdepth 5 -type f -iname 'UsahoDen-v90-Laporan-Keuangan-Produk-Source.zip' -print -quit)"
           if [ -z "$ZIP" ]; then
-            echo "::error::ZIP source v89 tidak ditemukan."
+            echo "::error::Source ZIP v90 tidak ditemukan di repository."
             find . -maxdepth 5 -type f -iname '*.zip' -print || true
             exit 1
           fi
-
           mkdir -p "$RUNNER_TEMP/usaho-source"
           unzip -q "$ZIP" -d "$RUNNER_TEMP/usaho-source"
-
-          PROJECT_DIR="$(find "$RUNNER_TEMP/usaho-source" \
-            -type f -path '*/app/build.gradle' \
-            -print -quit | sed 's#/app/build.gradle$##')"
-
+          PROJECT_DIR="$(find "$RUNNER_TEMP/usaho-source" -type f -path '*/app/build.gradle' -print -quit | sed 's#/app/build.gradle$##')"
           if [ -z "$PROJECT_DIR" ]; then
-            echo "::error::app/build.gradle tidak ditemukan."
+            echo "::error::app/build.gradle tidak ditemukan di ZIP."
             exit 1
           fi
-
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
       - name: Decode existing signing keystore
@@ -109,22 +94,13 @@ jobs:
           KEY_PASSWORD: ${{ secrets.TOKOKU_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-
-          if [ -z "${KEYSTORE_BASE64:-}" ] || \
-             [ -z "${KEYSTORE_PASSWORD:-}" ] || \
-             [ -z "${KEY_ALIAS:-}" ]; then
-            echo "::error::Secrets keystore lama belum lengkap."
+          if [ -z "${KEYSTORE_BASE64:-}" ] || [ -z "${KEYSTORE_PASSWORD:-}" ] || [ -z "${KEY_ALIAS:-}" ]; then
+            echo "::error::Secrets keystore lama belum lengkap. Build dihentikan agar tanda tangan APK tidak berubah."
             exit 1
           fi
-
           KEYSTORE="$RUNNER_TEMP/usahoden-existing.jks"
           echo "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
-
-          keytool -list \
-            -keystore "$KEYSTORE" \
-            -storepass "$KEYSTORE_PASSWORD" \
-            -alias "$KEY_ALIAS" >/dev/null
-
+          keytool -list -keystore "$KEYSTORE" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
           {
             echo "TOKOKU_KEYSTORE_FILE=$KEYSTORE"
             echo "TOKOKU_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
@@ -132,42 +108,32 @@ jobs:
             echo "TOKOKU_KEY_PASSWORD=${KEY_PASSWORD:-$KEYSTORE_PASSWORD}"
           } >> "$GITHUB_ENV"
 
-      - name: Check identity and build release APK
+      - name: Check app identity and build release APK
         shell: bash
         run: |
           set -euo pipefail
           cd "$PROJECT_DIR"
-
           grep -Fq "applicationId 'com.tokoku.app'" app/build.gradle
-          grep -Eq 'versionCode[[:space:]]+89' app/build.gradle
-
+          grep -Eq 'versionCode[[:space:]]+90' app/build.gradle
           gradle :app:assembleRelease --no-daemon --stacktrace
 
-      - name: Verify APK signature and identity
+      - name: Verify APK signature and package
         shell: bash
         run: |
           set -euo pipefail
-
           APK="$PROJECT_DIR/app/build/outputs/apk/release/app-release.apk"
           test -s "$APK"
-
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" \
-            verify --verbose "$APK"
-
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" \
-            dump badging "$APK" | tee "$RUNNER_TEMP/apk-info.txt"
-
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee "$RUNNER_TEMP/apk-info.txt"
           grep -Fq "package: name='com.tokoku.app'" "$RUNNER_TEMP/apk-info.txt"
-          grep -Fq "versionCode='89'" "$RUNNER_TEMP/apk-info.txt"
-
+          grep -Fq "versionCode='90'" "$RUNNER_TEMP/apk-info.txt"
           mkdir -p output
-          cp "$APK" \
-            output/UsahoDen-v89-Riwayat-Pelanggan-Umum-FIX-Signed.apk
+          cp "$APK" output/UsahoDen-v90-Laporan-Keuangan-Produk-Signed.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v89-Riwayat-Pelanggan-Umum-FIX-Signed
-          path: output/UsahoDen-v89-Riwayat-Pelanggan-Umum-FIX-Signed.apk
+          name: UsahoDen-v90-Laporan-Keuangan-Produk-Signed
+          path: output/UsahoDen-v90-Laporan-Keuangan-Produk-Signed.apk
           if-no-files-found: error
           retention-days: 30
