@@ -1,5 +1,5 @@
 
-name: Build UsahoDen v91 Satuan Produk FIX
+name: Build UsahoDen v92 Laporan Laba Terpisah FIX
 
 on:
   workflow_dispatch:
@@ -50,7 +50,7 @@ jobs:
           "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "platforms;android-35"
           "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "build-tools;35.0.0"
 
-      - name: Verify SDK
+      - name: Verify Android SDK
         shell: bash
         run: |
           set -euo pipefail
@@ -70,19 +70,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ZIP="$(find . -maxdepth 5 -type f -iname 'UsahoDen-v91-Satuan-Produk-Kg-Bal-Source.zip' -print -quit)"
+          ZIP="$(find . -maxdepth 5 -type f -iname 'UsahoDen-v92-Laporan-Laba-Terpisah-Source.zip' -print -quit)"
           if [ -z "$ZIP" ]; then
-            echo "::error::ZIP sumber v91 tidak ditemukan."
+            echo "::error::Source ZIP v92 tidak ditemukan di repository."
             find . -maxdepth 5 -type f -iname '*.zip' -print || true
             exit 1
           fi
+
           mkdir -p "$RUNNER_TEMP/usaho-source"
           unzip -q "$ZIP" -d "$RUNNER_TEMP/usaho-source"
+
           PROJECT_DIR="$(find "$RUNNER_TEMP/usaho-source" -type f -path '*/app/build.gradle' -print -quit | sed 's#/app/build.gradle$##')"
           if [ -z "$PROJECT_DIR" ]; then
             echo "::error::app/build.gradle tidak ditemukan dalam ZIP."
             exit 1
           fi
+
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
       - name: Decode existing signing keystore
@@ -94,13 +97,20 @@ jobs:
           KEY_PASSWORD: ${{ secrets.TOKOKU_KEY_PASSWORD }}
         run: |
           set -euo pipefail
+
           if [ -z "${KEYSTORE_BASE64:-}" ] || [ -z "${KEYSTORE_PASSWORD:-}" ] || [ -z "${KEY_ALIAS:-}" ]; then
-            echo "::error::Secrets keystore lama belum lengkap. Build dihentikan agar tanda tangan APK tidak berubah."
+            echo "::error::Secrets keystore lama belum lengkap. Build dihentikan untuk menjaga kompatibilitas pembaruan APK."
             exit 1
           fi
+
           KEYSTORE="$RUNNER_TEMP/usahoden-existing.jks"
           echo "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
-          keytool -list -keystore "$KEYSTORE" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
+
+          keytool -list \
+            -keystore "$KEYSTORE" \
+            -storepass "$KEYSTORE_PASSWORD" \
+            -alias "$KEY_ALIAS" >/dev/null
+
           {
             echo "TOKOKU_KEYSTORE_FILE=$KEYSTORE"
             echo "TOKOKU_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
@@ -108,32 +118,45 @@ jobs:
             echo "TOKOKU_KEY_PASSWORD=${KEY_PASSWORD:-$KEYSTORE_PASSWORD}"
           } >> "$GITHUB_ENV"
 
-      - name: Check app identity and build release APK
+      - name: Check application identity and version
         shell: bash
         run: |
           set -euo pipefail
           cd "$PROJECT_DIR"
+
           grep -Fq "applicationId 'com.tokoku.app'" app/build.gradle
-          grep -Eq 'versionCode[[:space:]]+91' app/build.gradle
+          grep -Eq 'versionCode[[:space:]]+92' app/build.gradle
+
+      - name: Build release APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
           gradle :app:assembleRelease --no-daemon --stacktrace
 
       - name: Verify APK signature and package
         shell: bash
         run: |
           set -euo pipefail
+
           APK="$PROJECT_DIR/app/build/outputs/apk/release/app-release.apk"
           test -s "$APK"
+
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee "$RUNNER_TEMP/apk-info.txt"
+
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" \
+            | tee "$RUNNER_TEMP/apk-info.txt"
+
           grep -Fq "package: name='com.tokoku.app'" "$RUNNER_TEMP/apk-info.txt"
-          grep -Fq "versionCode='91'" "$RUNNER_TEMP/apk-info.txt"
+          grep -Fq "versionCode='92'" "$RUNNER_TEMP/apk-info.txt"
+
           mkdir -p output
-          cp "$APK" output/UsahoDen-v91-Satuan-Produk-Kg-Bal-Signed.apk
+          cp "$APK" output/UsahoDen-v92-Laporan-Laba-Terpisah-Signed.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v91-Satuan-Produk-Kg-Bal-Signed
-          path: output/UsahoDen-v91-Satuan-Produk-Kg-Bal-Signed.apk
+          name: UsahoDen-v92-Laporan-Laba-Terpisah-Signed
+          path: output/UsahoDen-v92-Laporan-Laba-Terpisah-Signed.apk
           if-no-files-found: error
           retention-days: 30
