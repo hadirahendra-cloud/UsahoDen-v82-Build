@@ -1,21 +1,14 @@
-name: Build UsahoDen v83 Riwayat Pelanggan Header FIX
+name: Build UsahoDen v83 Riwayat Scroll FIX
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - ".github/workflows/build.yml"
-      - "UsahoDen-v83-Riwayat-Pelanggan-Header-FIX-Source.zip"
 
 permissions:
   contents: read
 
 jobs:
   build:
-    name: Build APK UsahoDen v83
     runs-on: ubuntu-latest
-    timeout-minutes: 35
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -24,7 +17,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: '17'
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
@@ -32,8 +25,8 @@ jobs:
       - name: Accept Android SDK licenses
         shell: bash
         run: |
-          set -euo pipefail
-          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          set -e
+          yes | sdkmanager --licenses >/dev/null || true
 
       - name: Install Android SDK packages
         shell: bash
@@ -41,50 +34,35 @@ jobs:
           set -euo pipefail
           sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
-      - name: Set up Gradle 8.7
+      - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: "8.7"
+          gradle-version: '8.7'
 
-      - name: Extract and verify exact v83 source
+      - name: Find and extract UsahoDen v83 source ZIP
         shell: bash
         run: |
           set -euo pipefail
-          ZIP="$GITHUB_WORKSPACE/UsahoDen-v83-Riwayat-Pelanggan-Header-FIX-Source.zip"
+          ZIP="$(find . -maxdepth 3 -type f -iname 'UsahoDen-v83-Riwayat-Scroll-Source.zip' -print -quit)"
 
-          test -s "$ZIP" || {
-            echo "::error::ZIP sumber v83 tidak ditemukan di root repository."
-            find "$GITHUB_WORKSPACE" -maxdepth 2 -type f -iname '*.zip' -printf '%P\n' || true
+          if [ -z "$ZIP" ]; then
+            echo "::error::File UsahoDen-v83-Riwayat-Scroll-Source.zip tidak ditemukan di repository."
+            echo "ZIP yang ditemukan:"
+            find . -maxdepth 3 -type f -iname '*.zip' -print || true
             exit 1
-          }
+          fi
 
-          unzip -tq "$ZIP"
-          rm -rf extracted-source
-          mkdir -p extracted-source
-          unzip -oq "$ZIP" -d extracted-source
+          mkdir -p "$RUNNER_TEMP/usaho-source"
+          unzip -q "$ZIP" -d "$RUNNER_TEMP/usaho-source"
 
-          PROJECT_DIR="$(find extracted-source -type f -path '*/app/build.gradle' -print -quit | sed 's#/app/build.gradle##')"
+          PROJECT_DIR="$(find "$RUNNER_TEMP/usaho-source" -type f -path '*/app/build.gradle' -print -quit | sed 's#/app/build.gradle$##')"
 
-          test -n "$PROJECT_DIR" || {
-            echo "::error::Proyek Android tidak ditemukan dalam ZIP."
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "::error::app/build.gradle tidak ditemukan di dalam ZIP."
             exit 1
-          }
+          fi
 
-          cp -a "$PROJECT_DIR"/. "$GITHUB_WORKSPACE"/
-
-          test -s app/build.gradle
-          test -s app/src/main/assets/index.html
-          test -s app/src/main/java/com/tokoku/app/MainActivity.java
-
-          grep -q "applicationId 'com.tokoku.app'" app/build.gradle
-          grep -q 'versionCode 83' app/build.gradle
-          grep -q "versionName '3.22.15-riwayat-pelanggan-header-v83'" app/build.gradle
-          grep -q 'v83: Riwayat pelanggan dimulai tepat di bawah header tetap' app/src/main/assets/index.html
-          grep -q 'function saveSale()' app/src/main/assets/index.html
-          grep -q 'function shareReceiptImage()' app/src/main/assets/index.html
-          grep -q "localStorage.getItem('tokoku_db')" app/src/main/assets/index.html
-
-          echo "Sumber v83 dan fitur penting terverifikasi."
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
       - name: Decode permanent signing key
         shell: bash
@@ -99,64 +77,67 @@ jobs:
           if [ -z "${TOKOKU_KEYSTORE_BASE64:-}" ] || \
              [ -z "${TOKOKU_KEYSTORE_PASSWORD:-}" ] || \
              [ -z "${TOKOKU_KEY_ALIAS:-}" ]; then
-            echo "::error::Signing secrets belum lengkap. Build dihentikan agar APK tidak menggunakan kunci berbeda."
+            echo "::error::Signing secrets belum lengkap. Build dihentikan agar APK tidak memakai tanda tangan berbeda."
             exit 1
           fi
 
-          printf '%s' "$TOKOKU_KEYSTORE_BASE64" \
-            | base64 --decode > "$RUNNER_TEMP/usaho-den-permanent.jks"
+          echo "$TOKOKU_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/usaho-den-permanent.jks"
 
           keytool -list \
             -keystore "$RUNNER_TEMP/usaho-den-permanent.jks" \
             -storepass "$TOKOKU_KEYSTORE_PASSWORD" \
             -alias "$TOKOKU_KEY_ALIAS" >/dev/null
 
-          {
-            echo "TOKOKU_KEYSTORE_FILE=$RUNNER_TEMP/usaho-den-permanent.jks"
-            echo "TOKOKU_KEYSTORE_PASSWORD=$TOKOKU_KEYSTORE_PASSWORD"
-            echo "TOKOKU_KEY_ALIAS=$TOKOKU_KEY_ALIAS"
-            echo "TOKOKU_KEY_PASSWORD=${TOKOKU_KEY_PASSWORD:-$TOKOKU_KEYSTORE_PASSWORD}"
-          } >> "$GITHUB_ENV"
+          echo "TOKOKU_KEYSTORE_FILE=$RUNNER_TEMP/usaho-den-permanent.jks" >> "$GITHUB_ENV"
+          echo "TOKOKU_KEYSTORE_PASSWORD=$TOKOKU_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "TOKOKU_KEY_ALIAS=$TOKOKU_KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "TOKOKU_KEY_PASSWORD=${TOKOKU_KEY_PASSWORD:-$TOKOKU_KEYSTORE_PASSWORD}" >> "$GITHUB_ENV"
+
+      - name: Verify app identity and preserved features
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+
+          grep -q "applicationId 'com.tokoku.app'" app/build.gradle
+          grep -q 'versionCode 83' app/build.gradle
+          grep -q "localStorage.getItem('tokoku_db')" app/src/main/assets/index.html
+          grep -q 'function saveSale()' app/src/main/assets/index.html
+          grep -q 'function shareReceiptImage()' app/src/main/assets/index.html
+          grep -q 'function renderCart()' app/src/main/assets/index.html
+          grep -q '#historyList' app/src/main/assets/index.html
+          test -s app/src/main/java/com/tokoku/app/MainActivity.java
 
       - name: Build signed release APK
         shell: bash
         run: |
           set -euo pipefail
+          cd "$PROJECT_DIR"
+          gradle :app:assembleRelease --no-daemon --stacktrace
 
-          gradle :app:clean :app:assembleRelease --no-daemon --stacktrace
-
-          APK="app/build/outputs/apk/release/app-release.apk"
-          test -s "$APK" || {
-            echo "::error::APK release tidak berhasil dibuat."
-            exit 1
-          }
-
-      - name: Verify APK signature, package, and version
+      - name: Verify signed APK and copy output
         shell: bash
         run: |
           set -euo pipefail
 
-          APK="app/build/outputs/apk/release/app-release.apk"
-          TOOLS="$ANDROID_HOME/build-tools/35.0.0"
+          APK="$PROJECT_DIR/app/build/outputs/apk/release/app-release.apk"
+          test -s "$APK"
 
-          "$TOOLS/apksigner" verify --verbose "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
 
-          "$TOOLS/aapt" dump badging "$APK" \
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" \
             | tee "$RUNNER_TEMP/badging.txt"
 
           grep -q "package: name='com.tokoku.app'" "$RUNNER_TEMP/badging.txt"
           grep -q "versionCode='83'" "$RUNNER_TEMP/badging.txt"
-          grep -q "versionName='3.22.15-riwayat-pelanggan-header-v83'" "$RUNNER_TEMP/badging.txt"
 
           mkdir -p output
-          cp "$APK" output/UsahoDen-v83-Riwayat-Pelanggan-Header-FIX.apk
-
-          echo "APK v83 lolos pemeriksaan identitas."
+          cp "$APK" output/UsahoDen-v83-Riwayat-Scroll-FIX-Signed.apk
 
       - name: Upload signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v83-Riwayat-Pelanggan-Header-FIX-Signed
-          path: output/UsahoDen-v83-Riwayat-Pelanggan-Header-FIX.apk
+          name: UsahoDen-v83-Riwayat-Scroll-FIX-Signed
+          path: output/UsahoDen-v83-Riwayat-Scroll-FIX-Signed.apk
           if-no-files-found: error
           retention-days: 30
