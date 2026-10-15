@@ -1,5 +1,5 @@
 
-name: Build UsahoDen v82 - FIX Posisi Daftar Pelanggan
+name: Build UsahoDen v82 - Login Tap Fix
 
 on:
   workflow_dispatch:
@@ -90,15 +90,15 @@ jobs:
 
           echo "Android SDK siap."
 
-      - name: Extract source ZIP v82
+      - name: Extract fixed login source ZIP
         shell: bash
         run: |
           set -euo pipefail
 
-          ZIP="UsahoDen-v82-Riwayat-Sticky-Compact-Source.zip"
+          ZIP="UsahoDen-v82-Login-Tap-Fix-Source.zip"
 
           if [ ! -f "$ZIP" ]; then
-            echo "::error::ZIP sumber v82 tidak ditemukan."
+            echo "::error::ZIP perbaikan login tidak ditemukan di root repository."
             exit 1
           fi
 
@@ -123,184 +123,22 @@ jobs:
           )
 
           if [ -z "$PROJECT" ]; then
-            echo "::error::Proyek Android tidak ditemukan."
+            echo "::error::Proyek Android tidak ditemukan di ZIP."
             exit 1
           fi
 
-          echo "PROJECT_DIR=$PROJECT" >> "$GITHUB_ENV"
-          echo "Proyek ditemukan: $PROJECT"
-
-      - name: Fix posisi konten tab Transaksi
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          HTML="$PROJECT_DIR/app/src/main/assets/index.html"
+          HTML="$PROJECT/app/src/main/assets/index.html"
 
           if [ ! -f "$HTML" ]; then
             echo "::error::index.html tidak ditemukan."
             exit 1
           fi
 
-          python3 - "$HTML" <<'PY'
-          from pathlib import Path
-          import re
-          import sys
+          grep -q 'loginSubmitButton' "$HTML"
+          grep -q 'usahoden-login-tap-fix-script-v1' "$HTML"
 
-          path = Path(sys.argv[1])
-          html = path.read_text(encoding="utf-8")
-          marker = "usahoden-transaksi-position-fix-v1"
-
-          # Bersihkan skrip patch yang sama jika pernah ditambahkan.
-          html = re.sub(
-              r'<!-- ' + marker + r' -->.*?<!-- /' + marker + r' -->',
-              '',
-              html,
-              flags=re.S
-          )
-
-          script = r"""
-          <!-- usahoden-transaksi-position-fix-v1 -->
-          <script id="usahoden-transaksi-position-fix-v1">
-          (function () {
-            'use strict';
-
-            function getContent() {
-              return document.getElementById('content')
-                || document.querySelector('.content')
-                || document.querySelector('main')
-                || document.querySelector('.main-content');
-            }
-
-            function isTransactionTabActive() {
-              var candidates = document.querySelectorAll(
-                'nav *, .bottom-nav *, .nav-item, [role="tab"]'
-              );
-
-              for (var i = 0; i < candidates.length; i++) {
-                var el = candidates[i];
-                var active = el.classList.contains('active')
-                  || el.classList.contains('selected')
-                  || el.classList.contains('current')
-                  || el.getAttribute('aria-current') === 'page'
-                  || el.getAttribute('aria-selected') === 'true';
-
-                if (!active) continue;
-
-                var label = (
-                  el.innerText || el.textContent || ''
-                ).replace(/\s+/g, ' ').trim();
-
-                if (/\bTransaksi\b/i.test(label)) {
-                  return true;
-                }
-              }
-
-              return false;
-            }
-
-            function applyFix() {
-              var content = getContent();
-              if (!content) return;
-
-              if (!content.hasAttribute('data-usaho-original-padding')) {
-                content.setAttribute(
-                  'data-usaho-original-padding',
-                  content.style.getPropertyValue('padding-top')
-                );
-                content.setAttribute(
-                  'data-usaho-original-priority',
-                  content.style.getPropertyPriority('padding-top')
-                );
-              }
-
-              if (isTransactionTabActive()) {
-                content.style.setProperty(
-                  'padding-top',
-                  '100px',
-                  'important'
-                );
-              } else if (
-                content.style.getPropertyValue('padding-top') === '100px'
-              ) {
-                var original = content.getAttribute(
-                  'data-usaho-original-padding'
-                ) || '';
-                var priority = content.getAttribute(
-                  'data-usaho-original-priority'
-                ) || '';
-
-                if (original) {
-                  content.style.setProperty(
-                    'padding-top',
-                    original,
-                    priority
-                  );
-                } else {
-                  content.style.removeProperty('padding-top');
-                }
-              }
-            }
-
-            function start() {
-              applyFix();
-
-              if (!document.body) return;
-
-              var observer = new MutationObserver(function () {
-                applyFix();
-              });
-
-              observer.observe(document.body, {
-                subtree: true,
-                childList: true,
-                attributes: true,
-                attributeFilter: [
-                  'class',
-                  'aria-current',
-                  'aria-selected'
-                ]
-              });
-            }
-
-            if (document.readyState === 'loading') {
-              document.addEventListener(
-                'DOMContentLoaded',
-                start,
-                { once: true }
-              );
-            } else {
-              start();
-            }
-          })();
-          </script>
-          <!-- /usahoden-transaksi-position-fix-v1 -->
-          """
-
-          # Sisipkan sebelum penutup dokumen jika tersedia.
-          # Tidak bergantung pada tag </head> atau </style>.
-          body_close = re.search(r"</body\s*>", html, re.I)
-          html_close = re.search(r"</html\s*>", html, re.I)
-
-          if body_close:
-            pos = body_close.start()
-            html = html[:pos] + script + "\n" + html[pos:]
-          elif html_close:
-            pos = html_close.start()
-            html = html[:pos] + script + "\n" + html[pos:]
-          else:
-            html += "\n" + script + "\n"
-
-          path.write_text(html, encoding="utf-8")
-
-          check = path.read_text(encoding="utf-8")
-          if marker not in check:
-            raise SystemExit("ERROR: patch tidak ditemukan setelah disimpan.")
-
-          print("Patch posisi tab Transaksi berhasil disisipkan.")
-          print("Header tidak diubah.")
-          print("Kode login dan data transaksi tidak diubah.")
-          PY
+          echo "PROJECT_DIR=$PROJECT" >> "$GITHUB_ENV"
+          echo "Sumber perbaikan login berhasil diverifikasi."
 
       - name: Verify permanent keystore
         shell: bash
@@ -387,7 +225,7 @@ jobs:
       - name: Upload UsahoDen APK
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-APK
+          name: UsahoDen-Login-Tap-Fix
           path: apk-output/UsahoDen.apk
           if-no-files-found: error
           retention-days: 14
