@@ -1,5 +1,5 @@
 
-name: Build UsahoDen v95 Background Gradasi Biru FIX
+name: Build UsahoDen v96 Tombol Kembali FIX
 
 on:
   workflow_dispatch:
@@ -30,7 +30,7 @@ jobs:
           set -euo pipefail
           SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
           if [ -z "$SDKMANAGER" ]; then
-            echo "::error::sdkmanager tidak ditemukan."
+            echo "::error::sdkmanager tidak ditemukan pada runner."
             find /usr/local/lib/android /opt -type f -name sdkmanager -print 2>/dev/null | head -20 || true
             exit 1
           fi
@@ -50,7 +50,7 @@ jobs:
           "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "platforms;android-35"
           "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "build-tools;35.0.0"
 
-      - name: Verify SDK
+      - name: Verify Android SDK
         shell: bash
         run: |
           set -euo pipefail
@@ -70,9 +70,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ZIP="$(find . -maxdepth 5 -type f -iname 'UsahoDen-v95-Background-Gradasi-Biru-Source.zip' -print -quit)"
+          ZIP="$(find . -maxdepth 5 -type f -iname 'UsahoDen-v96-Tombol-Kembali-Navigasi-Source.zip' -print -quit)"
           if [ -z "$ZIP" ]; then
-            echo "::error::ZIP v95 tidak ditemukan. Upload ZIP sumber v95 ke repository."
+            echo "::error::ZIP v96 tidak ditemukan. Upload ZIP sumber v96 ke repository terlebih dahulu."
             find . -maxdepth 5 -type f -iname '*.zip' -print || true
             exit 1
           fi
@@ -80,7 +80,7 @@ jobs:
           unzip -q "$ZIP" -d "$RUNNER_TEMP/usaho-source"
           PROJECT_DIR="$(find "$RUNNER_TEMP/usaho-source" -type f -path '*/app/build.gradle' -print -quit | sed 's#/app/build.gradle$##')"
           if [ -z "$PROJECT_DIR" ]; then
-            echo "::error::app/build.gradle tidak ditemukan."
+            echo "::error::app/build.gradle tidak ditemukan dalam ZIP sumber."
             exit 1
           fi
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
@@ -95,7 +95,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${KEYSTORE_BASE64:-}" ] || [ -z "${KEYSTORE_PASSWORD:-}" ] || [ -z "${KEY_ALIAS:-}" ]; then
-            echo "::error::Secrets keystore lama belum lengkap. Build dihentikan agar tanda tangan APK tidak berubah."
+            echo "::error::Secrets keystore lama belum lengkap. Build dihentikan agar tanda tangan tidak berubah."
             exit 1
           fi
           KEYSTORE="$RUNNER_TEMP/usahoden-existing.jks"
@@ -108,15 +108,15 @@ jobs:
             echo "TOKOKU_KEY_PASSWORD=${KEY_PASSWORD:-$KEYSTORE_PASSWORD}"
           } >> "$GITHUB_ENV"
 
-      - name: Check identity and build signed release APK
+      - name: Check identity and build release APK
         shell: bash
         run: |
           set -euo pipefail
           cd "$PROJECT_DIR"
           grep -Fq "applicationId 'com.tokoku.app'" app/build.gradle
-          grep -Eq 'versionCode[[:space:]]+95' app/build.gradle
-          grep -Fq "versionName '3.22.15-background-gradient-v95'" app/build.gradle
-          grep -Fq 'usahoden-background-gradasi-biru-v95' app/src/main/assets/index.html
+          grep -Eq 'versionCode[[:space:]]+96' app/build.gradle
+          grep -Fq "versionName '3.22.15-background-gradient-v96'" app/build.gradle
+          grep -Fq 'usahoden-navigation-back-v96' app/src/main/assets/index.html
           gradle :app:assembleRelease --no-daemon --stacktrace
 
       - name: Verify APK signature and package
@@ -128,14 +128,14 @@ jobs:
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee "$RUNNER_TEMP/apk-info.txt"
           grep -Fq "package: name='com.tokoku.app'" "$RUNNER_TEMP/apk-info.txt"
-          grep -Fq "versionCode='95'" "$RUNNER_TEMP/apk-info.txt"
+          grep -Fq "versionCode='96'" "$RUNNER_TEMP/apk-info.txt"
           mkdir -p output
-          cp "$APK" output/UsahoDen-v95-Background-Gradasi-Biru-Signed.apk
+          cp "$APK" output/UsahoDen-v96-Tombol-Kembali-Signed.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v95-Background-Gradasi-Biru-Signed
-          path: output/UsahoDen-v95-Background-Gradasi-Biru-Signed.apk
+          name: UsahoDen-v96-Tombol-Kembali-Signed
+          path: output/UsahoDen-v96-Tombol-Kembali-Signed.apk
           if-no-files-found: error
           retention-days: 30
