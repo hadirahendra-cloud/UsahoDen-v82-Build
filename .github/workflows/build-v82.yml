@@ -1,11 +1,11 @@
 
-name: Build UsahoDen v130 Pelanggan Kembali Fix
+name: Build UsahoDen v131 Belanja Pelanggan Hari
 
 on:
   workflow_dispatch:
   push:
     paths:
-      - 'UsahoDen-v130-Pelanggan-Kembali-Fix-Source.zip'
+      - 'UsahoDen-v131-Belanja-Pelanggan-Hari-Source.zip'
       - '.github/workflows/build.yml'
 
 permissions:
@@ -63,28 +63,30 @@ jobs:
           unzip -q "$RUNNER_TEMP/gradle.zip" -d "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/gradle-8.7/bin" >> "$GITHUB_PATH"
 
-      - name: Extract v130 source
+      - name: Extract v131 source
         shell: bash
         run: |
           set -euo pipefail
-          ZIP="$(find . -maxdepth 5 -type f -name 'UsahoDen-v130-Pelanggan-Kembali-Fix-Source.zip' -print -quit)"
-          test -n "$ZIP" || { echo "::error::ZIP source v130 tidak ditemukan."; exit 1; }
+          ZIP="$(find . -maxdepth 5 -type f -name 'UsahoDen-v131-Belanja-Pelanggan-Hari-Source.zip' -print -quit)"
+          test -n "$ZIP" || { echo "::error::ZIP source v131 tidak ditemukan."; exit 1; }
           mkdir -p "$RUNNER_TEMP/usaho-source"
           unzip -q "$ZIP" -d "$RUNNER_TEMP/usaho-source"
           PROJECT_DIR="$(find "$RUNNER_TEMP/usaho-source" -type f -path '*/app/build.gradle' -print -quit | sed 's#/app/build.gradle$##')"
           test -n "$PROJECT_DIR" || { echo "::error::app/build.gradle tidak ditemukan."; exit 1; }
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
-      - name: Verify v130 source and JavaScript structure
+      - name: Verify v131 source
         shell: bash
         run: |
           set -euo pipefail
           cd "$PROJECT_DIR"
           grep -Fq "applicationId 'com.tokoku.app'" app/build.gradle
-          grep -Eq 'versionCode[[:space:]]+130' app/build.gradle
-          grep -Fq "versionName '3.22.15-v130-pelanggan-kembali-fix'" app/build.gradle
+          grep -Eq 'versionCode[[:space:]]+131' app/build.gradle
+          grep -Fq "versionName '3.22.15-v131-belanja-pelanggan-hari'" app/build.gradle
           grep -Fq '<style id="usahoden-v130-pelanggan-backbar">' app/src/main/assets/index.html
           grep -Fq "if(id==='customers')" app/src/main/assets/index.html
+          grep -Fq "Belanja Pelanggan / Hari" app/src/main/assets/index.html
+          grep -Fq "if(id==='customerDaily')" app/src/main/assets/index.html
           grep -Fq 'body:has(#receiptModal.show) .nav{z-index:15!important}' app/src/main/assets/index.html
           grep -Fq '#receiptModal .sheet{padding-top:100px!important;box-sizing:border-box!important}' app/src/main/assets/index.html
 
@@ -127,21 +129,21 @@ jobs:
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee "$RUNNER_TEMP/apk-info.txt"
           grep -Fq "package: name='com.tokoku.app'" "$RUNNER_TEMP/apk-info.txt"
-          grep -Fq "versionCode='130'" "$RUNNER_TEMP/apk-info.txt"
-          grep -Fq "versionName='3.22.15-v130-pelanggan-kembali-fix'" "$RUNNER_TEMP/apk-info.txt"
+          grep -Fq "versionCode='131'" "$RUNNER_TEMP/apk-info.txt"
+          grep -Fq "versionName='3.22.15-v131-belanja-pelanggan-hari'" "$RUNNER_TEMP/apk-info.txt"
 
       - name: Prepare APK artifact
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p "$GITHUB_WORKSPACE/output"
-          cp "$PROJECT_DIR/app/build/outputs/apk/release/app-release.apk" "$GITHUB_WORKSPACE/output/UsahoDen-v130-Pelanggan-Kembali-Fix.apk"
+          cp "$PROJECT_DIR/app/build/outputs/apk/release/app-release.apk" "$GITHUB_WORKSPACE/output/UsahoDen-v131-Belanja-Pelanggan-Hari.apk"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v130-Pelanggan-Kembali-Fix-APK
-          path: output/UsahoDen-v130-Pelanggan-Kembali-Fix.apk
+          name: UsahoDen-v131-Belanja-Pelanggan-Hari-APK
+          path: output/UsahoDen-v131-Belanja-Pelanggan-Hari.apk
           if-no-files-found: error
           retention-days: 14
 
