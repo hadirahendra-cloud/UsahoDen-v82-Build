@@ -1,11 +1,11 @@
 
-name: Build UsahoDen v121 Tindakan Turun Sedikit
+name: Build UsahoDen v122 Tindakan Turun 10px
 
 on:
   workflow_dispatch:
   push:
     paths:
-      - 'UsahoDen-v121-Tindakan-Turun-Sedikit-Source.zip'
+      - 'UsahoDen-v122-Tindakan-Turun-10px-Source.zip'
       - '.github/workflows/build.yml'
 
 permissions:
@@ -74,15 +74,15 @@ jobs:
           unzip -q "$RUNNER_TEMP/gradle.zip" -d "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/gradle-8.7/bin" >> "$GITHUB_PATH"
 
-      - name: Extract v121 Source
+      - name: Extract v122 Source
         shell: bash
         run: |
           set -euo pipefail
           ZIP="$(find . -maxdepth 5 -type f \
-            -name 'UsahoDen-v121-Tindakan-Turun-Sedikit-Source.zip' \
+            -name 'UsahoDen-v122-Tindakan-Turun-10px-Source.zip' \
             -print -quit)"
           if [ -z "$ZIP" ]; then
-            echo "::error::ZIP v121 tidak ditemukan di repository."
+            echo "::error::ZIP v122 tidak ditemukan di repository."
             exit 1
           fi
           mkdir -p "$RUNNER_TEMP/usaho-source"
@@ -129,11 +129,11 @@ jobs:
           set -euo pipefail
           cd "$PROJECT_DIR"
           grep -Fq "applicationId 'com.tokoku.app'" app/build.gradle
-          grep -Eq 'versionCode[[:space:]]+121' app/build.gradle
-          grep -Fq "versionName '3.22.15-v121-tindakan-turun-sedikit'" app/build.gradle
+          grep -Eq 'versionCode[[:space:]]+122' app/build.gradle
+          grep -Fq "versionName '3.22.15-v122-tindakan-turun-10px'" app/build.gradle
           gradle :app:assembleRelease --no-daemon --stacktrace
 
-      - name: Verify APK
+      - name: Verify APK and Copy
         shell: bash
         run: |
           set -euo pipefail
@@ -145,13 +145,14 @@ jobs:
             dump badging "$APK" | tee "$RUNNER_TEMP/apk-info.txt"
           grep -Fq "package: name='com.tokoku.app'" "$RUNNER_TEMP/apk-info.txt"
           mkdir -p "$GITHUB_WORKSPACE/output"
-          cp "$APK" "$GITHUB_WORKSPACE/output/UsahoDen-v121-Tindakan-Turun-Sedikit.apk"
+          cp "$APK" \
+            "$GITHUB_WORKSPACE/output/UsahoDen-v122-Tindakan-Turun-10px.apk"
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v121-Tindakan-Turun-Sedikit-APK
-          path: output/UsahoDen-v121-Tindakan-Turun-Sedikit.apk
+          name: UsahoDen-v122-Tindakan-Turun-10px-APK
+          path: output/UsahoDen-v122-Tindakan-Turun-10px.apk
           if-no-files-found: error
           retention-days: 14
 
