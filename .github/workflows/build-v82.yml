@@ -1,11 +1,11 @@
 
-name: Build UsahoDen v129 Pelanggan Kembali Sejajar FIX
+name: Build UsahoDen v130 Pelanggan Kembali Fix
 
 on:
   workflow_dispatch:
   push:
     paths:
-      - 'UsahoDen-v129-Pelanggan-Kembali-Sejajar-Fix-Source.zip'
+      - 'UsahoDen-v130-Pelanggan-Kembali-Fix-Source.zip'
       - '.github/workflows/build.yml'
 
 permissions:
@@ -29,31 +29,28 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Locate Android SDK manager
+      - name: Locate SDK Manager
         shell: bash
         run: |
           set -euo pipefail
           SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
-          if [ -z "$SDKMANAGER" ]; then
-            echo "::error::sdkmanager tidak ditemukan."
-            exit 1
-          fi
+          test -n "$SDKMANAGER" || { echo "::error::SDK Manager tidak ditemukan."; exit 1; }
           echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
 
       - name: Accept Android SDK licenses
         shell: bash
         run: |
           set -euo pipefail
+          set +o pipefail
           yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses || true
+          set -o pipefail
 
       - name: Install Android SDK packages
         shell: bash
         run: |
           set -euo pipefail
           "$SDKMANAGER" --sdk_root="$ANDROID_HOME" \
-            "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0"
+            "platform-tools" "platforms;android-35" "build-tools;35.0.0"
           test -d "$ANDROID_HOME/platforms/android-35"
           test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner"
           test -x "$ANDROID_HOME/build-tools/35.0.0/aapt"
@@ -62,52 +59,36 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip \
-            -O "$RUNNER_TEMP/gradle.zip"
+          wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip -O "$RUNNER_TEMP/gradle.zip"
           unzip -q "$RUNNER_TEMP/gradle.zip" -d "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/gradle-8.7/bin" >> "$GITHUB_PATH"
 
-      - name: Find and extract v129 source ZIP
+      - name: Extract v130 source
         shell: bash
         run: |
           set -euo pipefail
-          ZIP="$(find . -maxdepth 5 -type f \
-            -iname 'UsahoDen-v129-Pelanggan-Kembali-Sejajar-Fix-Source.zip' \
-            -print -quit)"
-          if [ -z "$ZIP" ]; then
-            echo "::error::ZIP source v129 tidak ditemukan."
-            find . -maxdepth 5 -type f -iname '*.zip' -print || true
-            exit 1
-          fi
-
+          ZIP="$(find . -maxdepth 5 -type f -name 'UsahoDen-v130-Pelanggan-Kembali-Fix-Source.zip' -print -quit)"
+          test -n "$ZIP" || { echo "::error::ZIP source v130 tidak ditemukan."; exit 1; }
           mkdir -p "$RUNNER_TEMP/usaho-source"
           unzip -q "$ZIP" -d "$RUNNER_TEMP/usaho-source"
-
-          PROJECT_DIR="$(find "$RUNNER_TEMP/usaho-source" \
-            -type f -path '*/app/build.gradle' -print -quit \
-            | sed 's#/app/build.gradle$##')"
-          if [ -z "$PROJECT_DIR" ]; then
-            echo "::error::app/build.gradle tidak ditemukan."
-            exit 1
-          fi
+          PROJECT_DIR="$(find "$RUNNER_TEMP/usaho-source" -type f -path '*/app/build.gradle' -print -quit | sed 's#/app/build.gradle$##')"
+          test -n "$PROJECT_DIR" || { echo "::error::app/build.gradle tidak ditemukan."; exit 1; }
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
-      - name: Verify requested version and app identity
+      - name: Verify v130 source and JavaScript structure
         shell: bash
         run: |
           set -euo pipefail
           cd "$PROJECT_DIR"
           grep -Fq "applicationId 'com.tokoku.app'" app/build.gradle
-          grep -Eq 'versionCode[[:space:]]+129' app/build.gradle
-          grep -Fq \
-            "versionName '3.22.15-v129-pelanggan-kembali-sejajar-fix'" \
-            app/build.gradle
-          grep -Fq 'justify-content:flex-start!important' \
-            app/src/main/assets/index.html
-          grep -Fq "if(id==='customers')" \
-            app/src/main/assets/index.html
+          grep -Eq 'versionCode[[:space:]]+130' app/build.gradle
+          grep -Fq "versionName '3.22.15-v130-pelanggan-kembali-fix'" app/build.gradle
+          grep -Fq '<style id="usahoden-v130-pelanggan-backbar">' app/src/main/assets/index.html
+          grep -Fq "if(id==='customers')" app/src/main/assets/index.html
+          grep -Fq 'body:has(#receiptModal.show) .nav{z-index:15!important}' app/src/main/assets/index.html
+          grep -Fq '#receiptModal .sheet{padding-top:100px!important;box-sizing:border-box!important}' app/src/main/assets/index.html
 
-      - name: Decode existing signing keystore
+      - name: Decode existing signing key
         shell: bash
         env:
           KEYSTORE_BASE64: ${{ secrets.TOKOKU_KEYSTORE_BASE64 }}
@@ -116,19 +97,13 @@ jobs:
           KEY_PASSWORD: ${{ secrets.TOKOKU_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          if [ -z "${KEYSTORE_BASE64:-}" ] || \
-             [ -z "${KEYSTORE_PASSWORD:-}" ] || \
-             [ -z "${KEY_ALIAS:-}" ]; then
+          if [ -z "${KEYSTORE_BASE64:-}" ] || [ -z "${KEYSTORE_PASSWORD:-}" ] || [ -z "${KEY_ALIAS:-}" ]; then
             echo "::error::Secrets keystore lama belum lengkap."
             exit 1
           fi
-
           KEYSTORE="$RUNNER_TEMP/usahoden-existing.jks"
           echo "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
-          keytool -list -keystore "$KEYSTORE" \
-            -storepass "$KEYSTORE_PASSWORD" \
-            -alias "$KEY_ALIAS" >/dev/null
-
+          keytool -list -keystore "$KEYSTORE" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
           {
             echo "TOKOKU_KEYSTORE_FILE=$KEYSTORE"
             echo "TOKOKU_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
@@ -143,39 +118,34 @@ jobs:
           cd "$PROJECT_DIR"
           gradle :app:assembleRelease --no-daemon --stacktrace
 
-      - name: Verify APK and prepare artifact
+      - name: Verify APK
         shell: bash
         run: |
           set -euo pipefail
           APK="$PROJECT_DIR/app/build/outputs/apk/release/app-release.apk"
           test -s "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee "$RUNNER_TEMP/apk-info.txt"
+          grep -Fq "package: name='com.tokoku.app'" "$RUNNER_TEMP/apk-info.txt"
+          grep -Fq "versionCode='130'" "$RUNNER_TEMP/apk-info.txt"
+          grep -Fq "versionName='3.22.15-v130-pelanggan-kembali-fix'" "$RUNNER_TEMP/apk-info.txt"
 
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" \
-            verify --verbose "$APK"
-
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" \
-            dump badging "$APK" | tee "$RUNNER_TEMP/apk-info.txt"
-
-          grep -Fq "package: name='com.tokoku.app'" \
-            "$RUNNER_TEMP/apk-info.txt"
-          grep -Fq "versionCode='129'" "$RUNNER_TEMP/apk-info.txt"
-          grep -Fq \
-            "versionName='3.22.15-v129-pelanggan-kembali-sejajar-fix'" \
-            "$RUNNER_TEMP/apk-info.txt"
-
+      - name: Prepare APK artifact
+        shell: bash
+        run: |
+          set -euo pipefail
           mkdir -p "$GITHUB_WORKSPACE/output"
-          cp "$APK" \
-            "$GITHUB_WORKSPACE/output/UsahoDen-v129-Pelanggan-Kembali-Sejajar-Fix.apk"
+          cp "$PROJECT_DIR/app/build/outputs/apk/release/app-release.apk" "$GITHUB_WORKSPACE/output/UsahoDen-v130-Pelanggan-Kembali-Fix.apk"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v129-Pelanggan-Kembali-Sejajar-Fix-APK
-          path: output/UsahoDen-v129-Pelanggan-Kembali-Sejajar-Fix.apk
+          name: UsahoDen-v130-Pelanggan-Kembali-Fix-APK
+          path: output/UsahoDen-v130-Pelanggan-Kembali-Fix.apk
           if-no-files-found: error
           retention-days: 14
 
-      - name: Cleanup temporary signing key
+      - name: Cleanup signing key
         if: always()
         shell: bash
         run: rm -f "$RUNNER_TEMP/usahoden-existing.jks"
