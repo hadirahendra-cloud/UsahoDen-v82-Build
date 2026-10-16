@@ -1,12 +1,12 @@
 
-name: Build UsahoDen v114 Tindakan Header Rapat
+name: Build UsahoDen v115 Tindakan Lebih Rapat
 
 on:
   workflow_dispatch:
   push:
     paths:
-      - 'UsahoDen-v114-Tindakan-Header-Rapat-Source.zip'
-      - '.github/workflows/build-usahoden-v114.yml'
+      - 'UsahoDen-v115-Tindakan-Lebih-Rapat-Source.zip'
+      - '.github/workflows/build-usahoden-v115.yml'
 
 permissions:
   contents: read
@@ -81,15 +81,15 @@ jobs:
           unzip -q "$RUNNER_TEMP/gradle.zip" -d "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/gradle-8.7/bin" >> "$GITHUB_PATH"
 
-      - name: Extract v114 source ZIP
+      - name: Extract v115 source ZIP
         shell: bash
         run: |
           set -euo pipefail
 
-          ZIP_FILE="$GITHUB_WORKSPACE/UsahoDen-v114-Tindakan-Header-Rapat-Source.zip"
+          ZIP_FILE="$GITHUB_WORKSPACE/UsahoDen-v115-Tindakan-Lebih-Rapat-Source.zip"
 
           if [ ! -f "$ZIP_FILE" ]; then
-            echo "::error::ZIP v114 tidak ditemukan di root repository."
+            echo "::error::ZIP v115 tidak ditemukan di root repository."
             find "$GITHUB_WORKSPACE" -maxdepth 4 \
               -type f -iname '*.zip' -print
             exit 1
@@ -109,8 +109,9 @@ jobs:
 
           PROJECT_DIR="$(dirname "$SETTINGS_FILE")"
 
-          if [ ! -f "$PROJECT_DIR/app/build.gradle" ]; then
-            echo "::error::app/build.gradle tidak ditemukan."
+          if [ ! -f "$PROJECT_DIR/app/build.gradle" ] &&
+             [ ! -f "$PROJECT_DIR/app/build.gradle.kts" ]; then
+            echo "::error::File Gradle aplikasi tidak ditemukan."
             exit 1
           fi
 
@@ -124,15 +125,17 @@ jobs:
           java -version
           gradle --version
 
-          grep -Fq "applicationId 'com.tokoku.app'" \
-            "$PROJECT_DIR/app/build.gradle"
+          BUILD_FILE="$PROJECT_DIR/app/build.gradle"
+          if [ ! -f "$BUILD_FILE" ]; then
+            BUILD_FILE="$PROJECT_DIR/app/build.gradle.kts"
+          fi
 
-          grep -Eq 'versionCode[[:space:]]+114' \
-            "$PROJECT_DIR/app/build.gradle"
+          grep -Fq "applicationId 'com.tokoku.app'" "$BUILD_FILE"
+          grep -Eq 'versionCode[[:space:]]+115' "$BUILD_FILE"
 
           grep -Fq \
-            "versionName '3.22.15-v114-action-title-spacing'" \
-            "$PROJECT_DIR/app/build.gradle"
+            "versionName '3.22.15-v115-action-title-spacing'" \
+            "$BUILD_FILE"
 
       - name: Decode existing signing keystore
         shell: bash
@@ -200,15 +203,15 @@ jobs:
             "$RUNNER_TEMP/apk-info.txt"
 
           mkdir -p "$GITHUB_WORKSPACE/output"
-          cp "$APK" "$GITHUB_WORKSPACE/output/UsahoDen-v114.apk"
+          cp "$APK" "$GITHUB_WORKSPACE/output/UsahoDen-v115.apk"
 
-          sha256sum "$GITHUB_WORKSPACE/output/UsahoDen-v114.apk"
+          sha256sum "$GITHUB_WORKSPACE/output/UsahoDen-v115.apk"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v114-APK
-          path: output/UsahoDen-v114.apk
+          name: UsahoDen-v115-APK
+          path: output/UsahoDen-v115.apk
           if-no-files-found: error
           retention-days: 14
 
