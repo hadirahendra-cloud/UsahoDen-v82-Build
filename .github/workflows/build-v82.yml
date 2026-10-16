@@ -1,12 +1,11 @@
-
-name: Build UsahoDen v114 Tindakan Rapat Header - Stable SDK
+name: Build UsahoDen v114 Kasir Tanpa Kembali - Stable SDK
 
 on:
   workflow_dispatch:
   push:
     paths:
-      - 'UsahoDen-v114-Tindakan-Rapat-Header-Source.zip'
-      - '.github/workflows/build-usahoden-v114.yml'
+      - 'UsahoDen-v114-Kasir-Tanpa-Kembali-Source.zip'
+      - '.github/workflows/build.yml'
 
 permissions:
   contents: read
@@ -29,7 +28,6 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # PATOKAN SDK SUKSES - JANGAN UBAH
       - name: Locate Android SDK manager
         shell: bash
         run: |
@@ -58,7 +56,7 @@ jobs:
           "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "platforms;android-35"
           "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "build-tools;35.0.0"
 
-      - name: Verify Android SDK
+      - name: Verify SDK
         shell: bash
         run: |
           set -euo pipefail
@@ -74,23 +72,27 @@ jobs:
           unzip -q "$RUNNER_TEMP/gradle.zip" -d "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/gradle-8.7/bin" >> "$GITHUB_PATH"
 
-      - name: Extract v114 source ZIP
+      - name: Find and extract v114 source ZIP
         shell: bash
         run: |
           set -euo pipefail
-          ZIP="$(find . -maxdepth 5 -type f -iname 'UsahoDen-v114-Tindakan-Rapat-Header-Source.zip' -print -quit)"
+          ZIP="$(find . -maxdepth 5 -type f -iname 'UsahoDen-v114-Kasir-Tanpa-Kembali-Source.zip' -print -quit)"
           if [ -z "$ZIP" ]; then
             echo "::error::ZIP v114 tidak ditemukan. Upload ZIP source ke root repository."
             find . -maxdepth 5 -type f -iname '*.zip' -print || true
             exit 1
           fi
+
           mkdir -p "$RUNNER_TEMP/usaho-source"
           unzip -q "$ZIP" -d "$RUNNER_TEMP/usaho-source"
+
           PROJECT_DIR="$(find "$RUNNER_TEMP/usaho-source" -type f -path '*/app/build.gradle' -print -quit | sed 's#/app/build.gradle$##')"
+
           if [ -z "$PROJECT_DIR" ]; then
             echo "::error::app/build.gradle tidak ditemukan."
             exit 1
           fi
+
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
       - name: Decode existing signing keystore
@@ -102,13 +104,22 @@ jobs:
           KEY_PASSWORD: ${{ secrets.TOKOKU_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          if [ -z "${KEYSTORE_BASE64:-}" ] || [ -z "${KEYSTORE_PASSWORD:-}" ] || [ -z "${KEY_ALIAS:-}" ]; then
+
+          if [ -z "${KEYSTORE_BASE64:-}" ] || \
+             [ -z "${KEYSTORE_PASSWORD:-}" ] || \
+             [ -z "${KEY_ALIAS:-}" ]; then
             echo "::error::Secrets keystore lama belum lengkap. Build dihentikan agar tanda tangan tidak berubah."
             exit 1
           fi
+
           KEYSTORE="$RUNNER_TEMP/usahoden-existing.jks"
           echo "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
-          keytool -list -keystore "$KEYSTORE" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
+
+          keytool -list \
+            -keystore "$KEYSTORE" \
+            -storepass "$KEYSTORE_PASSWORD" \
+            -alias "$KEY_ALIAS" >/dev/null
+
           {
             echo "TOKOKU_KEYSTORE_FILE=$KEYSTORE"
             echo "TOKOKU_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
@@ -116,24 +127,33 @@ jobs:
             echo "TOKOKU_KEY_PASSWORD=${KEY_PASSWORD:-$KEYSTORE_PASSWORD}"
           } >> "$GITHUB_ENV"
 
-      - name: Verify package and build signed APK
+      - name: Verify version and build signed APK
         shell: bash
         run: |
           set -euo pipefail
           cd "$PROJECT_DIR"
+
           grep -Fq "applicationId 'com.tokoku.app'" app/build.gradle
           grep -Eq 'versionCode[[:space:]]+114' app/build.gradle
+          grep -Fq "versionName '3.22.15-v114-cashier-no-back'" app/build.gradle
+
           gradle :app:assembleRelease --no-daemon --stacktrace
 
       - name: Verify APK signature and package
         shell: bash
         run: |
           set -euo pipefail
+
           APK="$PROJECT_DIR/app/build/outputs/apk/release/app-release.apk"
           test -s "$APK"
+
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee "$RUNNER_TEMP/apk-info.txt"
+
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" \
+            | tee "$RUNNER_TEMP/apk-info.txt"
+
           grep -Fq "package: name='com.tokoku.app'" "$RUNNER_TEMP/apk-info.txt"
+
           mkdir -p "$GITHUB_WORKSPACE/output"
           cp "$APK" "$GITHUB_WORKSPACE/output/UsahoDen-v114.apk"
 
