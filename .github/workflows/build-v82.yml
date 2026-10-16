@@ -1,5 +1,5 @@
 
-name: Build UsahoDen v105 Header Logo Tengah
+name: Build UsahoDen v106 Logo Tengah
 
 on:
   workflow_dispatch:
@@ -19,7 +19,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Java Temurin 17
+      - name: Setup Java Temurin 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -34,9 +34,7 @@ jobs:
             -type f -name sdkmanager -print -quit)"
 
           if [ -z "$SDKMANAGER" ]; then
-            echo "::error::sdkmanager tidak ditemukan."
-            find /usr/local/lib/android /opt \
-              -type f -name sdkmanager -print 2>/dev/null || true
+            echo "::error::SDK manager tidak ditemukan."
             exit 1
           fi
 
@@ -54,11 +52,11 @@ jobs:
           set -e
 
           if [ "$status" -ne 0 ]; then
-            echo "::error::Lisensi Android SDK gagal diterima."
+            echo "::error::Lisensi Android SDK gagal."
             exit 1
           fi
 
-      - name: Install required Android SDK packages
+      - name: Install Android SDK packages
         shell: bash
         run: |
           set -euo pipefail
@@ -91,17 +89,17 @@ jobs:
 
           echo "$RUNNER_TEMP/gradle-8.7/bin" >> "$GITHUB_PATH"
 
-      - name: Find and extract v105 source ZIP
+      - name: Find and extract v106 source
         shell: bash
         run: |
           set -euo pipefail
 
           ZIP="$(find . -maxdepth 6 -type f \
-            -iname 'UsahoDen-v105-Header-Logo-Tengah-Source.zip' \
+            -iname 'UsahoDen-v106-Logo-dan-Tulisan-Benar-Benar-Tengah-Source.zip' \
             -print -quit)"
 
           if [ -z "$ZIP" ]; then
-            echo "::error::ZIP source v105 tidak ditemukan."
+            echo "::error::ZIP source v106 tidak ditemukan."
             find . -type f -iname '*.zip' -print || true
             exit 1
           fi
@@ -120,7 +118,7 @@ jobs:
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
-      - name: Verify v105 source
+      - name: Verify source v106
         shell: bash
         run: |
           set -euo pipefail
@@ -129,19 +127,18 @@ jobs:
           grep -Fq "applicationId 'com.tokoku.app'" \
             app/build.gradle
 
-          grep -Eq 'versionCode[[:space:]]+105' \
+          grep -Eq 'versionCode[[:space:]]+106' \
             app/build.gradle
 
           grep -Fq \
-            "versionName '3.22.15-header-logo-centered-v105'" \
+            "versionName '3.22.15-header-logo-centered-v106'" \
             app/build.gradle
 
           test -s app/src/main/assets/index.html
-          test -s app/src/main/assets/header-royal-minang-bg.png
 
-          echo "Pemeriksaan source v105 berhasil."
+          echo "Source v106 lolos pemeriksaan awal."
 
-      - name: Decode existing signing keystore
+      - name: Decode existing keystore
         shell: bash
         env:
           KEYSTORE_BASE64: ${{ secrets.TOKOKU_KEYSTORE_BASE64 }}
@@ -184,7 +181,7 @@ jobs:
           gradle :app:assembleRelease \
             --no-daemon --stacktrace
 
-      - name: Verify APK signature and version
+      - name: Verify APK
         shell: bash
         run: |
           set -euo pipefail
@@ -206,18 +203,18 @@ jobs:
           grep -Fq "package: name='com.tokoku.app'" \
             "$RUNNER_TEMP/apk-info.txt"
 
-          grep -Fq "versionCode='105'" \
+          grep -Fq "versionCode='106'" \
             "$RUNNER_TEMP/apk-info.txt"
 
           mkdir -p output
 
           cp "$APK" \
-            output/UsahoDen-v105-Header-Logo-Tengah-SIGNED.apk
+            output/UsahoDen-v106-Logo-Tengah-SIGNED.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v105-Header-Logo-Tengah-SIGNED
-          path: output/UsahoDen-v105-Header-Logo-Tengah-SIGNED.apk
+          name: UsahoDen-v106-Logo-Tengah-SIGNED
+          path: output/UsahoDen-v106-Logo-Tengah-SIGNED.apk
           if-no-files-found: error
           retention-days: 30
