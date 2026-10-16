@@ -1,11 +1,11 @@
 
-name: Build UsahoDen v125 Tindakan Turun 10px
+name: Build UsahoDen v126 Tindakan Turun 10px
 
 on:
   workflow_dispatch:
   push:
     paths:
-      - 'UsahoDen-v125-Tindakan-Turun-10px-Source.zip'
+      - 'UsahoDen-v126-Tindakan-Turun-10px-Source.zip'
       - '.github/workflows/build.yml'
 
 permissions:
@@ -15,12 +15,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+
     env:
       ANDROID_HOME: /usr/local/lib/android/sdk
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
     steps:
-      - name: Checkout
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Setup Java Temurin 17
@@ -33,15 +34,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" \
             -type f -name sdkmanager -print -quit)"
-          test -n "$SDKMANAGER" || {
+
+          if [ -z "$SDKMANAGER" ]; then
             echo "::error::SDK Manager tidak ditemukan."
             exit 1
-          }
+          fi
+
           echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
 
-      - name: Accept SDK Licenses
+      - name: Accept Android SDK Licenses
         shell: bash
         run: |
           set -euo pipefail
@@ -53,6 +57,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           "$SDKMANAGER" --sdk_root="$ANDROID_HOME" \
             "platform-tools" \
             "platforms;android-35" \
@@ -60,29 +65,36 @@ jobs:
 
           test -d "$ANDROID_HOME/platforms/android-35"
           test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          test -x "$ANDROID_HOME/build-tools/35.0.0/aapt"
 
       - name: Install Gradle 8.7
         shell: bash
         run: |
           set -euo pipefail
+
           wget -q \
             https://services.gradle.org/distributions/gradle-8.7-bin.zip \
             -O "$RUNNER_TEMP/gradle.zip"
-          unzip -q "$RUNNER_TEMP/gradle.zip" -d "$RUNNER_TEMP"
+
+          unzip -q "$RUNNER_TEMP/gradle.zip" \
+            -d "$RUNNER_TEMP"
+
           echo "$RUNNER_TEMP/gradle-8.7/bin" >> "$GITHUB_PATH"
 
-      - name: Extract v125 Source
+      - name: Extract v126 Source
         shell: bash
         run: |
           set -euo pipefail
+
           ZIP="$(find . -maxdepth 5 -type f \
-            -name 'UsahoDen-v125-Tindakan-Turun-10px-Source.zip' \
+            -name 'UsahoDen-v126-Tindakan-Turun-10px-Source.zip' \
             -print -quit)"
 
-          test -n "$ZIP" || {
-            echo "::error::ZIP v125 tidak ditemukan di repository."
+          if [ -z "$ZIP" ]; then
+            echo "::error::ZIP source v126 tidak ditemukan."
+            echo "Unggah ZIP ke root repository."
             exit 1
-          }
+          fi
 
           mkdir -p "$RUNNER_TEMP/usaho-source"
           unzip -q "$ZIP" -d "$RUNNER_TEMP/usaho-source"
@@ -91,10 +103,10 @@ jobs:
             -type f -path '*/app/build.gradle' \
             -print -quit | sed 's#/app/build.gradle$##')"
 
-          test -n "$PROJECT_DIR" || {
+          if [ -z "$PROJECT_DIR" ]; then
             echo "::error::app/build.gradle tidak ditemukan."
             exit 1
-          }
+          fi
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
@@ -104,15 +116,21 @@ jobs:
           set -euo pipefail
           cd "$PROJECT_DIR"
 
-          grep -Fq "applicationId 'com.tokoku.app'" app/build.gradle
-          grep -Eq 'versionCode[[:space:]]+125' app/build.gradle
-          grep -Fq \
-            "versionName '3.22.15-v125-tindakan-turun-10px'" \
+          grep -Fq "applicationId 'com.tokoku.app'" \
+            app/build.gradle
+
+          grep -Eq 'versionCode[[:space:]]+126' \
             app/build.gradle
 
           grep -Fq \
-            '#receiptModal .sheet{padding-top:90px!important;box-sizing:border-box!important}' \
+            "versionName '3.22.15-v126-tindakan-turun-10px'" \
+            app/build.gradle
+
+          grep -Fq \
+            '#receiptModal .sheet{padding-top:100px!important;box-sizing:border-box!important}' \
             app/src/main/assets/index.html
+
+          echo "Identitas aplikasi dan CSS v126 terverifikasi."
 
       - name: Decode Existing Signing Key
         shell: bash
@@ -151,7 +169,10 @@ jobs:
         run: |
           set -euo pipefail
           cd "$PROJECT_DIR"
-          gradle :app:assembleRelease --no-daemon --stacktrace
+
+          gradle :app:assembleRelease \
+            --no-daemon \
+            --stacktrace
 
       - name: Verify APK
         shell: bash
@@ -159,7 +180,11 @@ jobs:
           set -euo pipefail
 
           APK="$PROJECT_DIR/app/build/outputs/apk/release/app-release.apk"
-          test -s "$APK"
+
+          if [ ! -s "$APK" ]; then
+            echo "::error::APK release tidak ditemukan."
+            exit 1
+          fi
 
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" \
             verify --verbose "$APK"
@@ -169,24 +194,30 @@ jobs:
 
           grep -Fq "package: name='com.tokoku.app'" \
             "$RUNNER_TEMP/apk-info.txt"
-          grep -Fq "versionCode='125'" "$RUNNER_TEMP/apk-info.txt"
-          grep -Fq \
-            "versionName='3.22.15-v125-tindakan-turun-10px'" \
+
+          grep -Fq "versionCode='126'" \
             "$RUNNER_TEMP/apk-info.txt"
 
-      - name: Prepare APK
+          grep -Fq \
+            "versionName='3.22.15-v126-tindakan-turun-10px'" \
+            "$RUNNER_TEMP/apk-info.txt"
+
+      - name: Prepare APK Artifact
         shell: bash
         run: |
           set -euo pipefail
+
           mkdir -p "$GITHUB_WORKSPACE/output"
-          cp "$PROJECT_DIR/app/build/outputs/apk/release/app-release.apk" \
-            "$GITHUB_WORKSPACE/output/UsahoDen-v125-Tindakan-Turun-10px.apk"
+
+          cp \
+            "$PROJECT_DIR/app/build/outputs/apk/release/app-release.apk" \
+            "$GITHUB_WORKSPACE/output/UsahoDen-v126-Tindakan-Turun-10px.apk"
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v125-Tindakan-Turun-10px-APK
-          path: output/UsahoDen-v125-Tindakan-Turun-10px.apk
+          name: UsahoDen-v126-Tindakan-Turun-10px-APK
+          path: output/UsahoDen-v126-Tindakan-Turun-10px.apk
           if-no-files-found: error
           retention-days: 14
 
