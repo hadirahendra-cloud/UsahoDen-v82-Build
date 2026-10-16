@@ -1,11 +1,11 @@
 
-name: Build UsahoDen v126 Tindakan Turun 10px
+name: Build UsahoDen v127 Bar Bawah Kembali
 
 on:
   workflow_dispatch:
   push:
     paths:
-      - 'UsahoDen-v126-Tindakan-Turun-10px-Source.zip'
+      - 'UsahoDen-v127-Bar-Bawah-Kembali-Source.zip'
       - '.github/workflows/build.yml'
 
 permissions:
@@ -81,18 +81,17 @@ jobs:
 
           echo "$RUNNER_TEMP/gradle-8.7/bin" >> "$GITHUB_PATH"
 
-      - name: Extract v126 Source
+      - name: Extract v127 Source
         shell: bash
         run: |
           set -euo pipefail
 
           ZIP="$(find . -maxdepth 5 -type f \
-            -name 'UsahoDen-v126-Tindakan-Turun-10px-Source.zip' \
+            -name 'UsahoDen-v127-Bar-Bawah-Kembali-Source.zip' \
             -print -quit)"
 
           if [ -z "$ZIP" ]; then
-            echo "::error::ZIP source v126 tidak ditemukan."
-            echo "Unggah ZIP ke root repository."
+            echo "::error::ZIP source v127 tidak ditemukan."
             exit 1
           fi
 
@@ -119,18 +118,26 @@ jobs:
           grep -Fq "applicationId 'com.tokoku.app'" \
             app/build.gradle
 
-          grep -Eq 'versionCode[[:space:]]+126' \
+          grep -Eq 'versionCode[[:space:]]+127' \
             app/build.gradle
 
           grep -Fq \
-            "versionName '3.22.15-v126-tindakan-turun-10px'" \
+            "versionName '3.22.15-v127-bar-bawah-kembali'" \
             app/build.gradle
 
           grep -Fq \
             '#receiptModal .sheet{padding-top:100px!important;box-sizing:border-box!important}' \
             app/src/main/assets/index.html
 
-          echo "Identitas aplikasi dan CSS v126 terverifikasi."
+          grep -Fq \
+            'body:has(#receiptModal.show) .nav{z-index:15!important}' \
+            app/src/main/assets/index.html
+
+          grep -Fq \
+            '#receiptModal .sheet{padding-bottom:calc(90px + env(safe-area-inset-bottom))!important}' \
+            app/src/main/assets/index.html
+
+          echo "Versi dan aturan CSS v127 terverifikasi."
 
       - name: Decode Existing Signing Key
         shell: bash
@@ -150,6 +157,7 @@ jobs:
           fi
 
           KEYSTORE="$RUNNER_TEMP/usahoden-existing.jks"
+
           echo "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
 
           keytool -list \
@@ -195,11 +203,11 @@ jobs:
           grep -Fq "package: name='com.tokoku.app'" \
             "$RUNNER_TEMP/apk-info.txt"
 
-          grep -Fq "versionCode='126'" \
+          grep -Fq "versionCode='127'" \
             "$RUNNER_TEMP/apk-info.txt"
 
           grep -Fq \
-            "versionName='3.22.15-v126-tindakan-turun-10px'" \
+            "versionName='3.22.15-v127-bar-bawah-kembali'" \
             "$RUNNER_TEMP/apk-info.txt"
 
       - name: Prepare APK Artifact
@@ -211,13 +219,13 @@ jobs:
 
           cp \
             "$PROJECT_DIR/app/build/outputs/apk/release/app-release.apk" \
-            "$GITHUB_WORKSPACE/output/UsahoDen-v126-Tindakan-Turun-10px.apk"
+            "$GITHUB_WORKSPACE/output/UsahoDen-v127-Bar-Bawah-Kembali.apk"
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v126-Tindakan-Turun-10px-APK
-          path: output/UsahoDen-v126-Tindakan-Turun-10px.apk
+          name: UsahoDen-v127-Bar-Bawah-Kembali-APK
+          path: output/UsahoDen-v127-Bar-Bawah-Kembali.apk
           if-no-files-found: error
           retention-days: 14
 
