@@ -1,11 +1,11 @@
 
-name: Build UsahoDen v133 Laporan Laba Header Kanan - Stable SDK
+name: Build UsahoDen v134 Laporan Laba Header Kanan Fix
 
 on:
   workflow_dispatch:
   push:
     paths:
-      - 'UsahoDen-v133-Laporan-Laba-Header-Kanan-Source.zip'
+      - 'UsahoDen-v134-Laporan-Laba-Header-Kanan-Fix-Source.zip'
       - '.github/workflows/build.yml'
 
 permissions:
@@ -15,6 +15,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+
     env:
       ANDROID_HOME: /usr/local/lib/android/sdk
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
@@ -36,7 +37,6 @@ jobs:
           SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
           if [ -z "$SDKMANAGER" ]; then
             echo "::error::sdkmanager tidak ditemukan."
-            find /usr/local/lib/android /opt -type f -name sdkmanager -print 2>/dev/null | head -20 || true
             exit 1
           fi
           echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
@@ -49,7 +49,7 @@ jobs:
           yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses || true
           set -o pipefail
 
-      - name: Install required Android SDK packages
+      - name: Install Android SDK packages
         shell: bash
         run: |
           set -euo pipefail
@@ -57,7 +57,7 @@ jobs:
           "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "platforms;android-35"
           "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "build-tools;35.0.0"
 
-      - name: Verify SDK
+      - name: Verify Android SDK
         shell: bash
         run: |
           set -euo pipefail
@@ -69,27 +69,37 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip -O "$RUNNER_TEMP/gradle.zip"
+          wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip \
+            -O "$RUNNER_TEMP/gradle.zip"
           unzip -q "$RUNNER_TEMP/gradle.zip" -d "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/gradle-8.7/bin" >> "$GITHUB_PATH"
 
-      - name: Find and extract v133 source ZIP
+      - name: Find and extract v134 source
         shell: bash
         run: |
           set -euo pipefail
-          ZIP="$(find . -maxdepth 5 -type f -iname 'UsahoDen-v133-Laporan-Laba-Header-Kanan-Source.zip' -print -quit)"
+          ZIP="$(find . -maxdepth 5 -type f \
+            -iname 'UsahoDen-v134-Laporan-Laba-Header-Kanan-Fix-Source.zip' \
+            -print -quit)"
+
           if [ -z "$ZIP" ]; then
-            echo "::error::ZIP v133 tidak ditemukan. Upload ZIP source ke root repository."
+            echo "::error::ZIP v134 tidak ditemukan."
             find . -maxdepth 5 -type f -iname '*.zip' -print || true
             exit 1
           fi
+
           mkdir -p "$RUNNER_TEMP/usaho-source"
           unzip -q "$ZIP" -d "$RUNNER_TEMP/usaho-source"
-          PROJECT_DIR="$(find "$RUNNER_TEMP/usaho-source" -type f -path '*/app/build.gradle' -print -quit | sed 's#/app/build.gradle$##')"
+
+          PROJECT_DIR="$(find "$RUNNER_TEMP/usaho-source" \
+            -type f -path '*/app/build.gradle' -print -quit \
+            | sed 's#/app/build.gradle$##')"
+
           if [ -z "$PROJECT_DIR" ]; then
             echo "::error::app/build.gradle tidak ditemukan."
             exit 1
           fi
+
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
       - name: Decode existing signing keystore
@@ -101,13 +111,22 @@ jobs:
           KEY_PASSWORD: ${{ secrets.TOKOKU_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          if [ -z "${KEYSTORE_BASE64:-}" ] || [ -z "${KEYSTORE_PASSWORD:-}" ] || [ -z "${KEY_ALIAS:-}" ]; then
-            echo "::error::Secrets keystore lama belum lengkap. Build dihentikan agar tanda tangan tidak berubah."
+
+          if [ -z "${KEYSTORE_BASE64:-}" ] || \
+             [ -z "${KEYSTORE_PASSWORD:-}" ] || \
+             [ -z "${KEY_ALIAS:-}" ]; then
+            echo "::error::Secrets keystore lama belum lengkap."
             exit 1
           fi
+
           KEYSTORE="$RUNNER_TEMP/usahoden-existing.jks"
           echo "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
-          keytool -list -keystore "$KEYSTORE" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
+
+          keytool -list \
+            -keystore "$KEYSTORE" \
+            -storepass "$KEYSTORE_PASSWORD" \
+            -alias "$KEY_ALIAS" >/dev/null
+
           {
             echo "TOKOKU_KEYSTORE_FILE=$KEYSTORE"
             echo "TOKOKU_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
@@ -120,28 +139,41 @@ jobs:
         run: |
           set -euo pipefail
           cd "$PROJECT_DIR"
+
           grep -Fq "applicationId 'com.tokoku.app'" app/build.gradle
-          grep -Eq 'versionCode[[:space:]]+133' app/build.gradle
-          grep -Fq "versionName '3.22.15-v133-laporan-laba-header-kanan'" app/build.gradle
+          grep -Eq 'versionCode[[:space:]]+134' app/build.gradle
+          grep -Fq \
+            "versionName '3.22.15-v134-laporan-laba-header-kanan-fix'" \
+            app/build.gradle
+
           gradle :app:assembleRelease --no-daemon --stacktrace
 
       - name: Verify APK signature and package
         shell: bash
         run: |
           set -euo pipefail
+
           APK="$PROJECT_DIR/app/build/outputs/apk/release/app-release.apk"
           test -s "$APK"
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee "$RUNNER_TEMP/apk-info.txt"
-          grep -Fq "package: name='com.tokoku.app'" "$RUNNER_TEMP/apk-info.txt"
+
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" \
+            verify --verbose "$APK"
+
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" \
+            dump badging "$APK" | tee "$RUNNER_TEMP/apk-info.txt"
+
+          grep -Fq "package: name='com.tokoku.app'" \
+            "$RUNNER_TEMP/apk-info.txt"
+
           mkdir -p "$GITHUB_WORKSPACE/output"
-          cp "$APK" "$GITHUB_WORKSPACE/output/UsahoDen-v133-Laporan-Laba-Header-Kanan.apk"
+          cp "$APK" \
+            "$GITHUB_WORKSPACE/output/UsahoDen-v134-Laporan-Laba-Header-Kanan-Fix.apk"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v133-Laporan-Laba-Header-Kanan-APK
-          path: output/UsahoDen-v133-Laporan-Laba-Header-Kanan.apk
+          name: UsahoDen-v134-Laporan-Laba-Header-Kanan-Fix-APK
+          path: output/UsahoDen-v134-Laporan-Laba-Header-Kanan-Fix.apk
           if-no-files-found: error
           retention-days: 14
 
