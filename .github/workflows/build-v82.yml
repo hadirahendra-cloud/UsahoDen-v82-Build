@@ -1,12 +1,12 @@
 
-name: Build UsahoDen v113 Produk Rapi
+name: Build UsahoDen v114 Tindakan Header Rapat
 
 on:
   workflow_dispatch:
   push:
     paths:
-      - 'UsahoDen-v113-Produk-Rapi-Tanpa-Kembali-Source.zip'
-      - '.github/workflows/build-usahoden-v113.yml'
+      - 'UsahoDen-v114-Tindakan-Header-Rapat-Source.zip'
+      - '.github/workflows/build-usahoden-v114.yml'
 
 permissions:
   contents: read
@@ -30,7 +30,7 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # PATOKAN SDK YANG SUDAH SUKSES - JANGAN UBAH
+      # PATOKAN SDK SUKSES - JANGAN UBAH
       - name: Locate Android SDK manager
         shell: bash
         run: |
@@ -52,7 +52,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           set +o pipefail
           yes | "$SDKMANAGER" \
             --sdk_root="$ANDROID_HOME" --licenses || true
@@ -63,12 +62,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" \
-            "platform-tools"
-          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" \
-            "platforms;android-35"
-          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" \
-            "build-tools;35.0.0"
+          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "platform-tools"
+          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "platforms;android-35"
+          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "build-tools;35.0.0"
 
           test -d "$ANDROID_HOME/platforms/android-35"
           test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner"
@@ -82,20 +78,18 @@ jobs:
             https://services.gradle.org/distributions/gradle-8.7-bin.zip \
             -O "$RUNNER_TEMP/gradle.zip"
 
-          unzip -q "$RUNNER_TEMP/gradle.zip" \
-            -d "$RUNNER_TEMP"
-
+          unzip -q "$RUNNER_TEMP/gradle.zip" -d "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/gradle-8.7/bin" >> "$GITHUB_PATH"
 
-      - name: Extract v113 source ZIP
+      - name: Extract v114 source ZIP
         shell: bash
         run: |
           set -euo pipefail
 
-          ZIP_FILE="$GITHUB_WORKSPACE/UsahoDen-v113-Produk-Rapi-Tanpa-Kembali-Source.zip"
+          ZIP_FILE="$GITHUB_WORKSPACE/UsahoDen-v114-Tindakan-Header-Rapat-Source.zip"
 
           if [ ! -f "$ZIP_FILE" ]; then
-            echo "::error::ZIP v113 tidak ditemukan di root repository."
+            echo "::error::ZIP v114 tidak ditemukan di root repository."
             find "$GITHUB_WORKSPACE" -maxdepth 4 \
               -type f -iname '*.zip' -print
             exit 1
@@ -133,11 +127,11 @@ jobs:
           grep -Fq "applicationId 'com.tokoku.app'" \
             "$PROJECT_DIR/app/build.gradle"
 
-          grep -Eq 'versionCode[[:space:]]+113' \
+          grep -Eq 'versionCode[[:space:]]+114' \
             "$PROJECT_DIR/app/build.gradle"
 
           grep -Fq \
-            "versionName '3.22.15-v113-products-layout-lock'" \
+            "versionName '3.22.15-v114-action-title-spacing'" \
             "$PROJECT_DIR/app/build.gradle"
 
       - name: Decode existing signing keystore
@@ -206,15 +200,15 @@ jobs:
             "$RUNNER_TEMP/apk-info.txt"
 
           mkdir -p "$GITHUB_WORKSPACE/output"
-          cp "$APK" "$GITHUB_WORKSPACE/output/UsahoDen-v113.apk"
+          cp "$APK" "$GITHUB_WORKSPACE/output/UsahoDen-v114.apk"
 
-          sha256sum "$GITHUB_WORKSPACE/output/UsahoDen-v113.apk"
+          sha256sum "$GITHUB_WORKSPACE/output/UsahoDen-v114.apk"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v113-APK
-          path: output/UsahoDen-v113.apk
+          name: UsahoDen-v114-APK
+          path: output/UsahoDen-v114.apk
           if-no-files-found: error
           retention-days: 14
 
