@@ -1,5 +1,5 @@
 
-name: Build UsahoDen v102 Logo Kiri Keluar Tengah
+name: Build UsahoDen v104 Header Pendek Sedikit
 
 on:
   workflow_dispatch:
@@ -29,11 +29,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" \
             -type f -name sdkmanager -print -quit)"
 
           if [ -z "$SDKMANAGER" ]; then
             echo "::error::SDK manager tidak ditemukan."
+            find /usr/local/lib/android /opt \
+              -type f -name sdkmanager -print 2>/dev/null || true
             exit 1
           fi
 
@@ -43,6 +46,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           set +e
           yes | "$SDKMANAGER" \
             --sdk_root="$ANDROID_HOME" --licenses
@@ -50,23 +54,25 @@ jobs:
           set -e
 
           if [ "$status" -ne 0 ]; then
-            echo "::error::Lisensi Android SDK gagal."
+            echo "::error::Penerimaan lisensi SDK gagal."
             exit 1
           fi
 
-      - name: Install Android SDK packages
+      - name: Install required Android SDK packages
         shell: bash
         run: |
           set -euo pipefail
+
           "$SDKMANAGER" --sdk_root="$ANDROID_HOME" \
             "platform-tools" \
             "platforms;android-35" \
             "build-tools;35.0.0"
 
-      - name: Verify SDK
+      - name: Verify Android SDK
         shell: bash
         run: |
           set -euo pipefail
+
           test -d "$ANDROID_HOME/platforms/android-35"
           test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner"
           test -x "$ANDROID_HOME/build-tools/35.0.0/aapt"
@@ -75,24 +81,27 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           wget -q \
             https://services.gradle.org/distributions/gradle-8.7-bin.zip \
             -O "$RUNNER_TEMP/gradle.zip"
+
           unzip -q "$RUNNER_TEMP/gradle.zip" \
             -d "$RUNNER_TEMP"
+
           echo "$RUNNER_TEMP/gradle-8.7/bin" >> "$GITHUB_PATH"
 
-      - name: Extract v102 source
+      - name: Find and extract v104 source ZIP
         shell: bash
         run: |
           set -euo pipefail
 
-          ZIP="$(find . -maxdepth 5 -type f \
-            -iname 'UsahoDen-v102-Logo-Kiri-Keluar-Tengah-Source.zip' \
+          ZIP="$(find . -maxdepth 6 -type f \
+            -iname 'UsahoDen-v104-Header-Pendek-Sedikit-Source.zip' \
             -print -quit)"
 
           if [ -z "$ZIP" ]; then
-            echo "::error::ZIP source v102 tidak ditemukan."
+            echo "::error::ZIP source v104 tidak ditemukan."
             find . -type f -iname '*.zip' -print || true
             exit 1
           fi
@@ -100,21 +109,37 @@ jobs:
           mkdir -p "$RUNNER_TEMP/usaho-source"
           unzip -q "$ZIP" -d "$RUNNER_TEMP/usaho-source"
 
-          PROJECT_DIR="$RUNNER_TEMP/usaho-source"
+          PROJECT_DIR="$(find "$RUNNER_TEMP/usaho-source" \
+            -type f -path '*/app/build.gradle' \
+            -print -quit | sed 's#/app/build.gradle$##')"
 
-          if [ ! -f "$PROJECT_DIR/app/build.gradle" ]; then
-            PROJECT_DIR="$(find "$RUNNER_TEMP/usaho-source" \
-              -type f -path '*/app/build.gradle' \
-              -print -quit | sed 's#/app/build.gradle$##')"
-          fi
-
-          if [ -z "$PROJECT_DIR" ] || \
-             [ ! -f "$PROJECT_DIR/app/build.gradle" ]; then
-            echo "::error::Proyek Android tidak ditemukan."
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "::error::app/build.gradle tidak ditemukan."
             exit 1
           fi
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+      - name: Verify v104 source
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cd "$PROJECT_DIR"
+
+          grep -Fq "applicationId 'com.tokoku.app'" \
+            app/build.gradle
+
+          grep -Eq 'versionCode[[:space:]]+104' \
+            app/build.gradle
+
+          grep -Fq \
+            "versionName '3.22.15-header-height-v104'" \
+            app/build.gradle
+
+          test -s app/src/main/assets/index.html
+
+          echo "Pemeriksaan source v104 berhasil."
 
       - name: Decode existing signing keystore
         shell: bash
@@ -150,37 +175,27 @@ jobs:
             echo "TOKOKU_KEY_PASSWORD=${KEY_PASSWORD:-$KEYSTORE_PASSWORD}"
           } >> "$GITHUB_ENV"
 
-      - name: Verify source v102
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd "$PROJECT_DIR"
-
-          grep -Fq "applicationId 'com.tokoku.app'" \
-            app/build.gradle
-          grep -Eq 'versionCode[[:space:]]+102' \
-            app/build.gradle
-          grep -Fq \
-            "versionName '3.22.15-header-logo-left-v102'" \
-            app/build.gradle
-
-          test -s app/src/main/assets/index.html
-
       - name: Build release APK
         shell: bash
         run: |
           set -euo pipefail
+
           cd "$PROJECT_DIR"
+
           gradle :app:assembleRelease \
             --no-daemon --stacktrace
 
-      - name: Verify APK signature and package
+      - name: Verify APK signature and version
         shell: bash
         run: |
           set -euo pipefail
 
           APK="$PROJECT_DIR/app/build/outputs/apk/release/app-release.apk"
-          test -s "$APK"
+
+          if [ ! -s "$APK" ]; then
+            echo "::error::APK release tidak ditemukan."
+            exit 1
+          fi
 
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" \
             verify --verbose "$APK"
@@ -191,17 +206,19 @@ jobs:
 
           grep -Fq "package: name='com.tokoku.app'" \
             "$RUNNER_TEMP/apk-info.txt"
-          grep -Fq "versionCode='102'" \
+
+          grep -Fq "versionCode='104'" \
             "$RUNNER_TEMP/apk-info.txt"
 
           mkdir -p output
+
           cp "$APK" \
-            output/UsahoDen-v102-Logo-Kiri-Keluar-Tengah-SIGNED.apk
+            output/UsahoDen-v104-Header-Pendek-Sedikit-SIGNED.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v102-Logo-Kiri-Keluar-Tengah-SIGNED
-          path: output/UsahoDen-v102-Logo-Kiri-Keluar-Tengah-SIGNED.apk
+          name: UsahoDen-v104-Header-Pendek-Sedikit-SIGNED
+          path: output/UsahoDen-v104-Header-Pendek-Sedikit-SIGNED.apk
           if-no-files-found: error
           retention-days: 30
