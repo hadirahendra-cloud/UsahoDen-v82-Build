@@ -1,11 +1,11 @@
 
-name: Build UsahoDen v128 Pelanggan Kembali Sejajar
+name: Build UsahoDen v129 Pelanggan Kembali Sejajar FIX
 
 on:
   workflow_dispatch:
   push:
     paths:
-      - 'UsahoDen-v128-Pelanggan-Kembali-Sejajar-Source.zip'
+      - 'UsahoDen-v129-Pelanggan-Kembali-Sejajar-Fix-Source.zip'
       - '.github/workflows/build.yml'
 
 permissions:
@@ -20,7 +20,7 @@ jobs:
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Java Temurin 17
@@ -29,26 +29,24 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Locate SDK Manager
+      - name: Locate Android SDK manager
         shell: bash
         run: |
           set -euo pipefail
           SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
-          test -n "$SDKMANAGER" || {
-            echo "::error::SDK Manager tidak ditemukan."
+          if [ -z "$SDKMANAGER" ]; then
+            echo "::error::sdkmanager tidak ditemukan."
             exit 1
-          }
+          fi
           echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
 
-      - name: Accept Android SDK Licenses
+      - name: Accept Android SDK licenses
         shell: bash
         run: |
           set -euo pipefail
-          set +o pipefail
           yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses || true
-          set -o pipefail
 
-      - name: Install Android SDK Packages
+      - name: Install Android SDK packages
         shell: bash
         run: |
           set -euo pipefail
@@ -69,17 +67,18 @@ jobs:
           unzip -q "$RUNNER_TEMP/gradle.zip" -d "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/gradle-8.7/bin" >> "$GITHUB_PATH"
 
-      - name: Extract v128 Source
+      - name: Find and extract v129 source ZIP
         shell: bash
         run: |
           set -euo pipefail
           ZIP="$(find . -maxdepth 5 -type f \
-            -name 'UsahoDen-v128-Pelanggan-Kembali-Sejajar-Source.zip' \
+            -iname 'UsahoDen-v129-Pelanggan-Kembali-Sejajar-Fix-Source.zip' \
             -print -quit)"
-          test -n "$ZIP" || {
-            echo "::error::ZIP source v128 tidak ditemukan."
+          if [ -z "$ZIP" ]; then
+            echo "::error::ZIP source v129 tidak ditemukan."
+            find . -maxdepth 5 -type f -iname '*.zip' -print || true
             exit 1
-          }
+          fi
 
           mkdir -p "$RUNNER_TEMP/usaho-source"
           unzip -q "$ZIP" -d "$RUNNER_TEMP/usaho-source"
@@ -87,38 +86,28 @@ jobs:
           PROJECT_DIR="$(find "$RUNNER_TEMP/usaho-source" \
             -type f -path '*/app/build.gradle' -print -quit \
             | sed 's#/app/build.gradle$##')"
-          test -n "$PROJECT_DIR" || {
+          if [ -z "$PROJECT_DIR" ]; then
             echo "::error::app/build.gradle tidak ditemukan."
             exit 1
-          }
+          fi
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
-      - name: Verify v128 Changes
+      - name: Verify requested version and app identity
         shell: bash
         run: |
           set -euo pipefail
           cd "$PROJECT_DIR"
-
           grep -Fq "applicationId 'com.tokoku.app'" app/build.gradle
-          grep -Eq 'versionCode[[:space:]]+128' app/build.gradle
+          grep -Eq 'versionCode[[:space:]]+129' app/build.gradle
           grep -Fq \
-            "versionName '3.22.15-v128-pelanggan-kembali-sejajar'" \
+            "versionName '3.22.15-v129-pelanggan-kembali-sejajar-fix'" \
             app/build.gradle
-
-          grep -Fq '#customers .quick-backbar{' \
+          grep -Fq 'justify-content:flex-start!important' \
             app/src/main/assets/index.html
           grep -Fq "if(id==='customers')" \
             app/src/main/assets/index.html
 
-          # Pastikan perbaikan v127 tetap ada.
-          grep -Fq \
-            'body:has(#receiptModal.show) .nav{z-index:15!important}' \
-            app/src/main/assets/index.html
-          grep -Fq \
-            '#receiptModal .sheet{padding-top:100px!important;box-sizing:border-box!important}' \
-            app/src/main/assets/index.html
-
-      - name: Decode Existing Signing Key
+      - name: Decode existing signing keystore
         shell: bash
         env:
           KEYSTORE_BASE64: ${{ secrets.TOKOKU_KEYSTORE_BASE64 }}
@@ -127,7 +116,6 @@ jobs:
           KEY_PASSWORD: ${{ secrets.TOKOKU_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-
           if [ -z "${KEYSTORE_BASE64:-}" ] || \
              [ -z "${KEYSTORE_PASSWORD:-}" ] || \
              [ -z "${KEY_ALIAS:-}" ]; then
@@ -137,7 +125,6 @@ jobs:
 
           KEYSTORE="$RUNNER_TEMP/usahoden-existing.jks"
           echo "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
-
           keytool -list -keystore "$KEYSTORE" \
             -storepass "$KEYSTORE_PASSWORD" \
             -alias "$KEY_ALIAS" >/dev/null
@@ -149,18 +136,17 @@ jobs:
             echo "TOKOKU_KEY_PASSWORD=${KEY_PASSWORD:-$KEYSTORE_PASSWORD}"
           } >> "$GITHUB_ENV"
 
-      - name: Build Release APK
+      - name: Build release APK
         shell: bash
         run: |
           set -euo pipefail
           cd "$PROJECT_DIR"
           gradle :app:assembleRelease --no-daemon --stacktrace
 
-      - name: Verify APK
+      - name: Verify APK and prepare artifact
         shell: bash
         run: |
           set -euo pipefail
-
           APK="$PROJECT_DIR/app/build/outputs/apk/release/app-release.apk"
           test -s "$APK"
 
@@ -172,30 +158,24 @@ jobs:
 
           grep -Fq "package: name='com.tokoku.app'" \
             "$RUNNER_TEMP/apk-info.txt"
-          grep -Fq "versionCode='128'" \
-            "$RUNNER_TEMP/apk-info.txt"
+          grep -Fq "versionCode='129'" "$RUNNER_TEMP/apk-info.txt"
           grep -Fq \
-            "versionName='3.22.15-v128-pelanggan-kembali-sejajar'" \
+            "versionName='3.22.15-v129-pelanggan-kembali-sejajar-fix'" \
             "$RUNNER_TEMP/apk-info.txt"
 
-      - name: Prepare APK Artifact
-        shell: bash
-        run: |
-          set -euo pipefail
           mkdir -p "$GITHUB_WORKSPACE/output"
-          cp \
-            "$PROJECT_DIR/app/build/outputs/apk/release/app-release.apk" \
-            "$GITHUB_WORKSPACE/output/UsahoDen-v128-Pelanggan-Kembali-Sejajar.apk"
+          cp "$APK" \
+            "$GITHUB_WORKSPACE/output/UsahoDen-v129-Pelanggan-Kembali-Sejajar-Fix.apk"
 
-      - name: Upload APK Artifact
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v128-Pelanggan-Kembali-Sejajar-APK
-          path: output/UsahoDen-v128-Pelanggan-Kembali-Sejajar.apk
+          name: UsahoDen-v129-Pelanggan-Kembali-Sejajar-Fix-APK
+          path: output/UsahoDen-v129-Pelanggan-Kembali-Sejajar-Fix.apk
           if-no-files-found: error
           retention-days: 14
 
-      - name: Cleanup Signing Key
+      - name: Cleanup temporary signing key
         if: always()
         shell: bash
         run: rm -f "$RUNNER_TEMP/usahoden-existing.jks"
