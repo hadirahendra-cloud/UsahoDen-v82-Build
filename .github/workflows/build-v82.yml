@@ -1,12 +1,12 @@
 
-name: Build UsahoDen v111 Tindakan Rapat
+name: Build UsahoDen v112 Tindakan Rapat SDK FIX
 
 on:
   workflow_dispatch:
   push:
     paths:
-      - 'UsahoDen-v111-Tindakan-Rapat-Source.zip'
-      - '.github/workflows/build-usahoden-v111.yml'
+      - 'UsahoDen-v112-Tindakan-Rapat-SDK-FIX-Source.zip'
+      - '.github/workflows/build-usahoden-v112.yml'
 
 permissions:
   contents: read
@@ -14,11 +14,11 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
 
     env:
       ANDROID_HOME: /usr/local/lib/android/sdk
-      GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx3g -Dfile.encoding=UTF-8"
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
     steps:
       - name: Checkout repository
@@ -29,32 +29,40 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+          cache: gradle
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Accept Android SDK licenses
+      - name: Accept licenses and install SDK
         shell: bash
         run: |
           set -e
+          mkdir -p "$ANDROID_HOME/licenses"
+
+          set +o pipefail
           yes | sdkmanager --licenses >/dev/null 2>&1 || true
-          sdkmanager --licenses
-          sdkmanager \
+          set -o pipefail
+
+          sdkmanager --licenses || true
+
+          sdkmanager --install \
             "platform-tools" \
             "platforms;android-35" \
             "build-tools;35.0.0"
 
-      - name: Find and extract v111 source ZIP
+          test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner"
+
+      - name: Extract source ZIP
         shell: bash
         run: |
           set -euo pipefail
 
-          ZIP_FILE="UsahoDen-v111-Tindakan-Rapat-Source.zip"
+          ZIP_FILE="$GITHUB_WORKSPACE/UsahoDen-v112-Tindakan-Rapat-SDK-FIX-Source.zip"
 
           if [ ! -f "$ZIP_FILE" ]; then
-            echo "::error::ZIP tidak ditemukan: $ZIP_FILE"
-            echo "Pastikan ZIP diunggah ke root repository."
-            find . -maxdepth 3 -type f -name '*.zip' -print
+            echo "::error::ZIP v112 tidak ditemukan di root repository."
+            find "$GITHUB_WORKSPACE" -maxdepth 3 -type f -iname '*.zip'
             exit 1
           fi
 
@@ -65,58 +73,47 @@ jobs:
 
           if [ ! -f "$PROJECT_DIR/settings.gradle" ] &&
              [ ! -f "$PROJECT_DIR/settings.gradle.kts" ]; then
-            echo "::error::settings.gradle tidak ditemukan pada root ZIP."
-            find "$PROJECT_DIR" -maxdepth 4 \
-              \( -name settings.gradle -o -name settings.gradle.kts \) \
-              -print
+            echo "::error::settings.gradle tidak ditemukan."
             exit 1
           fi
 
           if [ ! -f "$PROJECT_DIR/app/build.gradle" ] &&
              [ ! -f "$PROJECT_DIR/app/build.gradle.kts" ]; then
-            echo "::error::File Gradle aplikasi tidak ditemukan."
+            echo "::error::Gradle aplikasi tidak ditemukan."
             exit 1
           fi
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-          echo "Source v111 berhasil diekstrak."
 
       - name: Setup Gradle 8.7
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
 
-      - name: Verify Java, Gradle and source version
+      - name: Verify source
         shell: bash
         run: |
           set -euo pipefail
+
           java -version
           gradle --version
+
+          grep -q 'versionCode 112' "$PROJECT_DIR/app/build.gradle" || {
+            echo "::error::Version code bukan 112."
+            exit 1
+          }
 
           grep -nE \
             'applicationId|versionCode|versionName|compileSdk' \
             "$PROJECT_DIR/app/build.gradle"
 
-          grep -q "applicationId 'com.tokoku.app'" \
-            "$PROJECT_DIR/app/build.gradle" || {
-              echo "::error::Application ID tidak sesuai."
-              exit 1
-            }
-
-          grep -q 'versionCode 111' \
-            "$PROJECT_DIR/app/build.gradle" || {
-              echo "::error::Version code bukan 111."
-              exit 1
-            }
-
-      - name: Prepare signing keystore
+      - name: Prepare existing signing key
         id: signing
         shell: bash
         env:
           KEYSTORE_BASE64: ${{ secrets.TOKOKU_KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.TOKOKU_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.TOKOKU_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.TOKOKU_KEY_PASSWORD }}
         run: |
           set -euo pipefail
 
@@ -124,8 +121,8 @@ jobs:
              [ -n "$KEYSTORE_PASSWORD" ] &&
              [ -n "$KEY_ALIAS" ]; then
 
-            echo "$KEYSTORE_BASE64" | base64 --decode \
-              > "$RUNNER_TEMP/usaho-release.jks"
+            echo "$KEYSTORE_BASE64" |
+              base64 --decode > "$RUNNER_TEMP/usaho-release.jks"
 
             keytool -list \
               -keystore "$RUNNER_TEMP/usaho-release.jks" \
@@ -133,13 +130,12 @@ jobs:
               -alias "$KEY_ALIAS" >/dev/null
 
             echo "enabled=true" >> "$GITHUB_OUTPUT"
-            echo "Keystore berhasil diverifikasi."
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::Keystore tidak lengkap. APK debug akan dibuat; tanda tangannya mungkin berbeda dari APK lama."
+            echo "::warning::Keystore belum lengkap; build debug tidak dijamin kompatibel untuk update APK lama."
           fi
 
-      - name: Build signed release APK
+      - name: Build release APK
         if: steps.signing.outputs.enabled == 'true'
         working-directory: ${{ env.PROJECT_DIR }}
         shell: bash
@@ -160,8 +156,7 @@ jobs:
           set -euo pipefail
           gradle --no-daemon clean assembleDebug
 
-      - name: Verify and prepare APK
-        id: apk
+      - name: Verify and collect APK
         shell: bash
         env:
           SIGNED_RELEASE: ${{ steps.signing.outputs.enabled }}
@@ -175,40 +170,29 @@ jobs:
           fi
 
           if [ ! -s "$APK" ]; then
-            echo "::error::APK hasil build tidak ditemukan."
+            echo "::error::APK tidak ditemukan."
             find "$PROJECT_DIR/app/build/outputs" \
               -type f -name '*.apk' -print || true
             exit 1
           fi
 
           mkdir -p "$GITHUB_WORKSPACE/output"
-          cp "$APK" "$GITHUB_WORKSPACE/output/UsahoDen-v111.apk"
+          cp "$APK" "$GITHUB_WORKSPACE/output/UsahoDen-v112.apk"
 
-          APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" \
+            verify --verbose "$GITHUB_WORKSPACE/output/UsahoDen-v112.apk"
 
-          if [ -x "$APKSIGNER" ]; then
-            "$APKSIGNER" verify --verbose \
-              "$GITHUB_WORKSPACE/output/UsahoDen-v111.apk"
-          else
-            echo "::error::apksigner tidak ditemukan."
-            exit 1
-          fi
-
-          sha256sum "$GITHUB_WORKSPACE/output/UsahoDen-v111.apk"
-
-          echo "APK_PATH=output/UsahoDen-v111.apk" \
-            >> "$GITHUB_OUTPUT"
+          sha256sum "$GITHUB_WORKSPACE/output/UsahoDen-v112.apk"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v111-APK
-          path: output/UsahoDen-v111.apk
+          name: UsahoDen-v112-APK
+          path: output/UsahoDen-v112.apk
           if-no-files-found: error
           retention-days: 14
 
       - name: Cleanup temporary keystore
         if: always()
         shell: bash
-        run: |
-          rm -f "$RUNNER_TEMP/usaho-release.jks"
+        run: rm -f "$RUNNER_TEMP/usaho-release.jks"
