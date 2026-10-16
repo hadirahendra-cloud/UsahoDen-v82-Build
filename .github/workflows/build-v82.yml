@@ -1,5 +1,5 @@
 
-name: Build UsahoDen v107 Tombol Keluar Kecil FIX
+name: Build UsahoDen v108 Kembali Beranda FIX
 
 on:
   workflow_dispatch:
@@ -89,17 +89,17 @@ jobs:
 
           echo "$RUNNER_TEMP/gradle-8.7/bin" >> "$GITHUB_PATH"
 
-      - name: Find and extract v107 source
+      - name: Find and extract v108 source
         shell: bash
         run: |
           set -euo pipefail
 
           ZIP="$(find . -maxdepth 6 -type f \
-            -iname 'UsahoDen-v107-Tombol-Keluar-Lebih-Kecil-Source.zip' \
+            -iname 'UsahoDen-v108-Hilangkan-Kembali-Hanya-Beranda-Source.zip' \
             -print -quit)"
 
           if [ -z "$ZIP" ]; then
-            echo "::error::ZIP source v107 tidak ditemukan."
+            echo "::error::ZIP source v108 tidak ditemukan."
             find . -type f -iname '*.zip' -print || true
             exit 1
           fi
@@ -118,7 +118,7 @@ jobs:
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
-      - name: Verify v107 source
+      - name: Verify v108 source
         shell: bash
         run: |
           set -euo pipefail
@@ -127,17 +127,12 @@ jobs:
           grep -Fq "applicationId 'com.tokoku.app'" \
             app/build.gradle
 
-          grep -Eq 'versionCode[[:space:]]+107' \
-            app/build.gradle
-
-          grep -Fq \
-            "versionName '3.22.15-header-logo-centered-exit-small-v107'" \
+          grep -Eq 'versionCode[[:space:]]+108' \
             app/build.gradle
 
           test -s app/src/main/assets/index.html
-          test -s app/src/main/assets/header-royal-minang-bg.png
 
-          echo "Pemeriksaan source v107 berhasil."
+          echo "Pemeriksaan dasar source v108 berhasil."
 
       - name: Decode existing signing keystore
         shell: bash
@@ -182,7 +177,7 @@ jobs:
           gradle :app:assembleRelease \
             --no-daemon --stacktrace
 
-      - name: Verify signed APK
+      - name: Verify signed APK and version
         shell: bash
         run: |
           set -euo pipefail
@@ -204,18 +199,18 @@ jobs:
           grep -Fq "package: name='com.tokoku.app'" \
             "$RUNNER_TEMP/apk-info.txt"
 
-          grep -Fq "versionCode='107'" \
+          grep -Fq "versionCode='108'" \
             "$RUNNER_TEMP/apk-info.txt"
 
           mkdir -p output
 
           cp "$APK" \
-            output/UsahoDen-v107-Tombol-Keluar-Lebih-Kecil-SIGNED.apk
+            output/UsahoDen-v108-Kembali-Beranda-SIGNED.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v107-Tombol-Keluar-Lebih-Kecil-SIGNED
-          path: output/UsahoDen-v107-Tombol-Keluar-Lebih-Kecil-SIGNED.apk
+          name: UsahoDen-v108-Kembali-Beranda-SIGNED
+          path: output/UsahoDen-v108-Kembali-Beranda-SIGNED.apk
           if-no-files-found: error
           retention-days: 30
