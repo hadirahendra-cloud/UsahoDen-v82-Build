@@ -1,10 +1,10 @@
-name: Build UsahoDen v115 Pilih Produk Header Rapat - Stable SDK
+name: Build UsahoDen v116 Tambah Belanja Header Rapat - Stable SDK
 
 on:
   workflow_dispatch:
   push:
     paths:
-      - 'UsahoDen-v115-Pilih-Produk-Header-Rapat-Source.zip'
+      - 'UsahoDen-v116-Tambah-Belanja-Header-Rapat-Source.zip'
       - '.github/workflows/build.yml'
 
 permissions:
@@ -28,7 +28,7 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # PATOKAN SDK SUKSES - JANGAN UBAH
+      # PATOKAN SDK YANG SUDAH SUKSES - JANGAN UBAH
       - name: Locate Android SDK manager
         shell: bash
         run: |
@@ -73,13 +73,13 @@ jobs:
           unzip -q "$RUNNER_TEMP/gradle.zip" -d "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/gradle-8.7/bin" >> "$GITHUB_PATH"
 
-      - name: Find and extract v115 source ZIP
+      - name: Find and extract v116 source ZIP
         shell: bash
         run: |
           set -euo pipefail
-          ZIP="$(find . -maxdepth 5 -type f -iname 'UsahoDen-v115-Pilih-Produk-Header-Rapat-Source.zip' -print -quit)"
+          ZIP="$(find . -maxdepth 5 -type f -iname 'UsahoDen-v116-Tambah-Belanja-Header-Rapat-Source.zip' -print -quit)"
           if [ -z "$ZIP" ]; then
-            echo "::error::ZIP v115 tidak ditemukan. Upload ZIP source ke root repository."
+            echo "::error::ZIP v116 tidak ditemukan. Upload ZIP source ke root repository."
             find . -maxdepth 5 -type f -iname '*.zip' -print || true
             exit 1
           fi
@@ -92,6 +92,7 @@ jobs:
             echo "::error::app/build.gradle tidak ditemukan."
             exit 1
           fi
+
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
       - name: Decode existing signing keystore
@@ -110,7 +111,11 @@ jobs:
 
           KEYSTORE="$RUNNER_TEMP/usahoden-existing.jks"
           echo "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
-          keytool -list -keystore "$KEYSTORE" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
+
+          keytool -list \
+            -keystore "$KEYSTORE" \
+            -storepass "$KEYSTORE_PASSWORD" \
+            -alias "$KEY_ALIAS" >/dev/null
 
           {
             echo "TOKOKU_KEYSTORE_FILE=$KEYSTORE"
@@ -124,9 +129,11 @@ jobs:
         run: |
           set -euo pipefail
           cd "$PROJECT_DIR"
+
           grep -Fq "applicationId 'com.tokoku.app'" app/build.gradle
-          grep -Eq 'versionCode[[:space:]]+115' app/build.gradle
-          grep -Fq "versionName '3.22.15-v115-picker-heading-inline'" app/build.gradle
+          grep -Eq 'versionCode[[:space:]]+116' app/build.gradle
+          grep -Fq "versionName '3.22.15-v116-add-shopping-heading'" app/build.gradle
+
           gradle :app:assembleRelease --no-daemon --stacktrace
 
       - name: Verify APK signature and package
@@ -137,17 +144,20 @@ jobs:
           test -s "$APK"
 
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee "$RUNNER_TEMP/apk-info.txt"
+
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" \
+            | tee "$RUNNER_TEMP/apk-info.txt"
+
           grep -Fq "package: name='com.tokoku.app'" "$RUNNER_TEMP/apk-info.txt"
 
           mkdir -p "$GITHUB_WORKSPACE/output"
-          cp "$APK" "$GITHUB_WORKSPACE/output/UsahoDen-v115.apk"
+          cp "$APK" "$GITHUB_WORKSPACE/output/UsahoDen-v116.apk"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v115-APK
-          path: output/UsahoDen-v115.apk
+          name: UsahoDen-v116-APK
+          path: output/UsahoDen-v116.apk
           if-no-files-found: error
           retention-days: 14
 
