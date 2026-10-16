@@ -1,12 +1,12 @@
 
-name: Build UsahoDen v112 Tindakan Rapat SDK FIX
+name: Build UsahoDen v111 Tindakan Rapat - Stable SDK
 
 on:
   workflow_dispatch:
   push:
     paths:
-      - 'UsahoDen-v112-Tindakan-Rapat-SDK-FIX-Source.zip'
-      - '.github/workflows/build-usahoden-v112.yml'
+      - 'UsahoDen-v111-Tindakan-Rapat-Source.zip'
+      - '.github/workflows/build-usahoden-v111-stable-sdk.yml'
 
 permissions:
   contents: read
@@ -24,46 +24,66 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Jangan aktifkan cache Gradle pada Setup Java.
       - name: Setup Java Temurin 17
         uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      # PATOKAN SDK ABANG - JANGAN UBAH
-      - name: Accept licenses and install Android SDK
+      # Gunakan SDK bawaan runner; jangan tambah setup-android.
+      - name: Verify runner Android SDK
         shell: bash
         run: |
-          set -e
-          mkdir -p "$ANDROID_HOME/licenses"
+          set -euo pipefail
+          echo "ANDROID_HOME=$ANDROID_HOME"
 
-          # Terima lisensi tanpa menggagalkan job karena yes menerima SIGPIPE.
-          set +o pipefail
-          yes | sdkmanager --licenses >/dev/null 2>&1 || true
-          set -o pipefail
+          command -v sdkmanager || true
 
-          sdkmanager --install \
-            "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0"
+          if [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
+            echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          elif ! command -v sdkmanager >/dev/null 2>&1; then
+            echo "::error::sdkmanager tidak ditemukan."
+            find "$ANDROID_HOME" -name sdkmanager -type f -print || true
+            exit 1
+          fi
 
-          sdkmanager --list_installed
-
-          test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner"
-
-      - name: Find and extract v112 source ZIP
+      # PATOKAN SDK ABANG - JANGAN UBAH
+      - name: Accept licenses and install fixed SDK packages
         shell: bash
         run: |
           set -euo pipefail
 
-          ZIP_FILE="$GITHUB_WORKSPACE/UsahoDen-v112-Tindakan-Rapat-SDK-FIX-Source.zip"
+          if [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
+            SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          else
+            SDKMANAGER="$(command -v sdkmanager)"
+          fi
+
+          mkdir -p "$ANDROID_HOME/licenses"
+
+          set +o pipefail
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          set -o pipefail
+
+          "$SDKMANAGER" --install \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
+
+          test -d "$ANDROID_HOME/platforms/android-35"
+          test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner"
+
+          "$SDKMANAGER" --list_installed
+
+      - name: Find and extract source ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ZIP_FILE="$GITHUB_WORKSPACE/UsahoDen-v111-Tindakan-Rapat-Source.zip"
 
           if [ ! -f "$ZIP_FILE" ]; then
-            echo "::error::ZIP v112 tidak ditemukan di root repository."
+            echo "::error::ZIP v111 tidak ditemukan di root repository."
             find "$GITHUB_WORKSPACE" -maxdepth 4 \
               -type f -iname '*.zip' -print
             exit 1
@@ -74,15 +94,14 @@ jobs:
 
           PROJECT_DIR="$GITHUB_WORKSPACE/source"
 
-          # Cari root proyek meskipun ZIP berisi satu folder pembungkus.
           if [ ! -f "$PROJECT_DIR/settings.gradle" ] &&
              [ ! -f "$PROJECT_DIR/settings.gradle.kts" ]; then
             SETTINGS_FILE="$(find "$PROJECT_DIR" -mindepth 2 -maxdepth 5 \
-              \( -name settings.gradle -o -name settings.gradle.kts \) \
+              -type f \( -name settings.gradle -o -name settings.gradle.kts \) \
               -print -quit)"
 
             if [ -z "$SETTINGS_FILE" ]; then
-              echo "::error::settings.gradle tidak ditemukan di dalam ZIP."
+              echo "::error::settings.gradle tidak ditemukan dalam ZIP."
               exit 1
             fi
 
@@ -91,12 +110,12 @@ jobs:
 
           if [ ! -f "$PROJECT_DIR/app/build.gradle" ] &&
              [ ! -f "$PROJECT_DIR/app/build.gradle.kts" ]; then
-            echo "::error::File app/build.gradle tidak ditemukan."
+            echo "::error::File Gradle aplikasi tidak ditemukan."
             exit 1
           fi
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-          echo "Proyek ditemukan: $PROJECT_DIR"
+          echo "Project directory: $PROJECT_DIR"
 
       - name: Setup Gradle 8.7
         uses: gradle/actions/setup-gradle@v4
@@ -104,7 +123,7 @@ jobs:
           gradle-version: '8.7'
           cache-disabled: true
 
-      - name: Verify Java and source version
+      - name: Verify source identity
         shell: bash
         run: |
           set -euo pipefail
@@ -112,21 +131,20 @@ jobs:
           java -version
           gradle --version
 
-          grep -q "versionCode 112" \
-            "$PROJECT_DIR/app/build.gradle" || {
-              echo "::error::Source bukan versionCode 112."
-              exit 1
-            }
+          BUILD_FILE="$PROJECT_DIR/app/build.gradle"
 
-          grep -q "applicationId 'com.tokoku.app'" \
-            "$PROJECT_DIR/app/build.gradle" || {
-              echo "::error::Application ID tidak sesuai."
-              exit 1
-            }
+          if [ ! -f "$BUILD_FILE" ]; then
+            BUILD_FILE="$PROJECT_DIR/app/build.gradle.kts"
+          fi
+
+          grep -q 'versionCode 111' "$BUILD_FILE" || {
+            echo "::error::Source bukan versionCode 111."
+            exit 1
+          }
 
           grep -nE \
             'applicationId|versionCode|versionName|compileSdk' \
-            "$PROJECT_DIR/app/build.gradle"
+            "$BUILD_FILE"
 
       - name: Prepare existing signing key
         id: signing
@@ -135,7 +153,6 @@ jobs:
           KEYSTORE_BASE64: ${{ secrets.TOKOKU_KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.TOKOKU_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.TOKOKU_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.TOKOKU_KEY_PASSWORD }}
         run: |
           set -euo pipefail
 
@@ -155,7 +172,7 @@ jobs:
             echo "Keystore berhasil diverifikasi."
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::Keystore belum lengkap; APK debug tidak dijamin kompatibel untuk update APK lama."
+            echo "::warning::Keystore tidak lengkap; debug APK mungkin tidak bisa update APK lama."
           fi
 
       - name: Build signed release APK
@@ -200,23 +217,22 @@ jobs:
           fi
 
           mkdir -p "$GITHUB_WORKSPACE/output"
-          cp "$APK" "$GITHUB_WORKSPACE/output/UsahoDen-v112.apk"
+          cp "$APK" "$GITHUB_WORKSPACE/output/UsahoDen-v111.apk"
 
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" \
-            verify --verbose "$GITHUB_WORKSPACE/output/UsahoDen-v112.apk"
+            verify --verbose "$GITHUB_WORKSPACE/output/UsahoDen-v111.apk"
 
-          sha256sum "$GITHUB_WORKSPACE/output/UsahoDen-v112.apk"
+          sha256sum "$GITHUB_WORKSPACE/output/UsahoDen-v111.apk"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v112-APK
-          path: output/UsahoDen-v112.apk
+          name: UsahoDen-v111-APK
+          path: output/UsahoDen-v111.apk
           if-no-files-found: error
           retention-days: 14
 
       - name: Cleanup temporary keystore
         if: always()
         shell: bash
-        run: |
-          rm -f "$RUNNER_TEMP/usaho-release.jks"
+        run: rm -f "$RUNNER_TEMP/usaho-release.jks"
