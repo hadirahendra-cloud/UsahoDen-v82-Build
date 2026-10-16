@@ -1,5 +1,5 @@
 
-name: Build UsahoDen v107 Tombol Keluar Kecil
+name: Build UsahoDen v107 Tombol Keluar Kecil FIX
 
 on:
   workflow_dispatch:
@@ -131,10 +131,11 @@ jobs:
             app/build.gradle
 
           grep -Fq \
-            "versionName '3.22.15-header-logo-centered-v107'" \
+            "versionName '3.22.15-header-logo-centered-exit-small-v107'" \
             app/build.gradle
 
           test -s app/src/main/assets/index.html
+          test -s app/src/main/assets/header-royal-minang-bg.png
 
           echo "Pemeriksaan source v107 berhasil."
 
@@ -181,7 +182,7 @@ jobs:
           gradle :app:assembleRelease \
             --no-daemon --stacktrace
 
-      - name: Verify APK signature and version
+      - name: Verify signed APK
         shell: bash
         run: |
           set -euo pipefail
