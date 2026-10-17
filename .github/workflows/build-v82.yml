@@ -1,11 +1,11 @@
 
-name: Build UsahoDen v136 Pengeluaran Harian Header Kanan
+name: Build UsahoDen v137 Customer Photo Spacing
 
 on:
   workflow_dispatch:
   push:
     paths:
-      - 'UsahoDen-v136-Pengeluaran-Harian-Header-Kanan-Source.zip'
+      - 'UsahoDen-v137-Customer-Photo-Spacing-Source.zip'
       - '.github/workflows/build.yml'
 
 permissions:
@@ -75,16 +75,16 @@ jobs:
           unzip -q "$RUNNER_TEMP/gradle.zip" -d "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/gradle-8.7/bin" >> "$GITHUB_PATH"
 
-      - name: Find and extract v136 source ZIP
+      - name: Find and extract v137 source ZIP
         shell: bash
         run: |
           set -euo pipefail
           ZIP="$(find . -maxdepth 5 -type f \
-            -iname 'UsahoDen-v136-Pengeluaran-Harian-Header-Kanan-Source.zip' \
+            -iname 'UsahoDen-v137-Customer-Photo-Spacing-Source.zip' \
             -print -quit)"
 
           if [ -z "$ZIP" ]; then
-            echo "::error::ZIP v136 tidak ditemukan."
+            echo "::error::ZIP v137 tidak ditemukan."
             find . -maxdepth 5 -type f -iname '*.zip' -print || true
             exit 1
           fi
@@ -142,9 +142,9 @@ jobs:
           cd "$PROJECT_DIR"
 
           grep -Fq "applicationId 'com.tokoku.app'" app/build.gradle
-          grep -Eq 'versionCode[[:space:]]+136' app/build.gradle
+          grep -Eq 'versionCode[[:space:]]+137' app/build.gradle
           grep -Fq \
-            "versionName '3.22.15-v136-pengeluaran-harian-header-kanan'" \
+            "versionName '3.22.15-v137-customer-photo-spacing'" \
             app/build.gradle
 
           gradle :app:assembleRelease --no-daemon --stacktrace
@@ -168,13 +168,13 @@ jobs:
 
           mkdir -p "$GITHUB_WORKSPACE/output"
           cp "$APK" \
-            "$GITHUB_WORKSPACE/output/UsahoDen-v136-Pengeluaran-Harian-Header-Kanan.apk"
+            "$GITHUB_WORKSPACE/output/UsahoDen-v137-Customer-Photo-Spacing.apk"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v136-Pengeluaran-Harian-Header-Kanan-APK
-          path: output/UsahoDen-v136-Pengeluaran-Harian-Header-Kanan.apk
+          name: UsahoDen-v137-Customer-Photo-Spacing-APK
+          path: output/UsahoDen-v137-Customer-Photo-Spacing.apk
           if-no-files-found: error
           retention-days: 14
 
