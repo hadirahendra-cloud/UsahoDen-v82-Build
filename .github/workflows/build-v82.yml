@@ -1,5 +1,5 @@
 
-name: Build UsahoDen v141 Rincian Pengeluaran Rapi
+name: Build UsahoDen v141 - SDK Fix
 
 on:
   workflow_dispatch:
@@ -26,28 +26,42 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK 35
+      - name: Locate Android SDK Manager
         shell: bash
         run: |
           set -euo pipefail
 
           SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" \
-            -type f -name sdkmanager -print -quit)"
+            -type f -name sdkmanager -print -quit 2>/dev/null || true)"
 
           if [ -z "$SDKMANAGER" ]; then
-            echo "::error::sdkmanager tidak ditemukan."
+            echo "::error::sdkmanager tidak ditemukan pada runner."
             exit 1
           fi
 
+          echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
+          "$SDKMANAGER" --version
+
+      - name: Accept Android SDK Licenses
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +o pipefail
           yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses || true
+          set -o pipefail
+
+      - name: Install Required Android SDK Packages
+        shell: bash
+        run: |
+          set -euo pipefail
 
           "$SDKMANAGER" --sdk_root="$ANDROID_HOME" \
             "platform-tools" \
             "platforms;android-35" \
             "build-tools;35.0.0"
+
+          test -d "$ANDROID_HOME/platforms/android-35"
+          test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner"
 
       - name: Install Gradle 8.7
         shell: bash
@@ -61,7 +75,7 @@ jobs:
           unzip -q "$RUNNER_TEMP/gradle.zip" -d "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/gradle-8.7/bin" >> "$GITHUB_PATH"
 
-      - name: Extract v141 Source
+      - name: Locate and Extract Source ZIP
         shell: bash
         run: |
           set -euo pipefail
@@ -83,7 +97,7 @@ jobs:
             -print -quit | sed 's#/app/build.gradle$##')"
 
           if [ -z "$PROJECT_DIR" ]; then
-            echo "::error::Struktur proyek Gradle tidak ditemukan."
+            echo "::error::Folder proyek Gradle tidak ditemukan."
             find "$RUNNER_TEMP/usaho-source" \
               -maxdepth 5 -type f | head -80
             exit 1
@@ -91,7 +105,7 @@ jobs:
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
-      - name: Decode Existing Signing Key
+      - name: Prepare Existing Signing Key
         shell: bash
         env:
           KEYSTORE_BASE64: ${{ secrets.TOKOKU_KEYSTORE_BASE64 }}
