@@ -1,5 +1,5 @@
 
-name: Build UsahoDen v143 Piutang Khusus Beranda
+name: Build UsahoDen v144 Tindakan Tap Fix
 
 on:
   workflow_dispatch:
@@ -81,15 +81,15 @@ jobs:
           echo "$RUNNER_TEMP/gradle-8.7/bin" >> "$GITHUB_PATH"
           "$RUNNER_TEMP/gradle-8.7/bin/gradle" --version
 
-      - name: Find and Extract v143 Source ZIP
+      - name: Find and Extract v144 Source ZIP
         shell: bash
         run: |
           set -euo pipefail
           ZIP="$(find . -maxdepth 5 -type f \
-            -iname 'UsahoDen-v143-Piutang-Khusus-Beranda-Source.zip' \
+            -iname 'UsahoDen-v144-Tindakan-Tap-Fix-Source.zip' \
             -print -quit)"
           if [ -z "$ZIP" ]; then
-            echo "::error::Source ZIP v143 tidak ditemukan di repository"
+            echo "::error::Source ZIP v144 tidak ditemukan"
             exit 1
           fi
 
@@ -191,14 +191,13 @@ jobs:
             "$RUNNER_TEMP/apk-info.txt"
 
           mkdir -p output
-          cp "$APK" \
-            output/UsahoDen-v143-Piutang-Khusus-Beranda.apk
+          cp "$APK" output/UsahoDen-v144-Tindakan-Tap-Fix.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v143-Piutang-Khusus-Beranda-APK
-          path: output/UsahoDen-v143-Piutang-Khusus-Beranda.apk
+          name: UsahoDen-v144-Tindakan-Tap-Fix-APK
+          path: output/UsahoDen-v144-Tindakan-Tap-Fix.apk
           if-no-files-found: error
           retention-days: 14
 
