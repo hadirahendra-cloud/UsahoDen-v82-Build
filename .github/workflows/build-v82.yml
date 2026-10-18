@@ -1,11 +1,10 @@
-
-name: Build UsahoDen v138 Pengeluaran Date Filter
+name: Build UsahoDen v139 Pengeluaran Tanggal Vertikal
 
 on:
   workflow_dispatch:
   push:
     paths:
-      - 'UsahoDen-v138-Pengeluaran-Tanggal-Source.zip'
+      - 'UsahoDen-v139-Pengeluaran-Tanggal-Vertikal-Source.zip'
       - '.github/workflows/build.yml'
 
 permissions:
@@ -73,13 +72,13 @@ jobs:
           unzip -q "$RUNNER_TEMP/gradle.zip" -d "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/gradle-8.7/bin" >> "$GITHUB_PATH"
 
-      - name: Find and extract v138 source ZIP
+      - name: Find and extract v139 source ZIP
         shell: bash
         run: |
           set -euo pipefail
-          ZIP="$(find . -maxdepth 5 -type f -iname 'UsahoDen-v138-Pengeluaran-Tanggal-Source.zip' -print -quit)"
+          ZIP="$(find . -maxdepth 5 -type f -iname 'UsahoDen-v139-Pengeluaran-Tanggal-Vertikal-Source.zip' -print -quit)"
           if [ -z "$ZIP" ]; then
-            echo "::error::ZIP v138 tidak ditemukan. Upload ZIP source ke root repository."
+            echo "::error::ZIP v139 tidak ditemukan. Upload ZIP source ke root repository."
             find . -maxdepth 5 -type f -iname '*.zip' -print || true
             exit 1
           fi
@@ -121,8 +120,8 @@ jobs:
           set -euo pipefail
           cd "$PROJECT_DIR"
           grep -Fq "applicationId 'com.tokoku.app'" app/build.gradle
-          grep -Eq 'versionCode[[:space:]]+138' app/build.gradle
-          grep -Fq "versionName '3.22.15-v138-expense-date-filter'" app/build.gradle
+          grep -Eq 'versionCode[[:space:]]+139' app/build.gradle
+          grep -Fq "versionName '3.22.15-v139-expense-date-list'" app/build.gradle
           gradle :app:assembleRelease --no-daemon --stacktrace
 
       - name: Verify APK signature and package
@@ -135,13 +134,13 @@ jobs:
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee "$RUNNER_TEMP/apk-info.txt"
           grep -Fq "package: name='com.tokoku.app'" "$RUNNER_TEMP/apk-info.txt"
           mkdir -p "$GITHUB_WORKSPACE/output"
-          cp "$APK" "$GITHUB_WORKSPACE/output/UsahoDen-v138-Pengeluaran-Tanggal.apk"
+          cp "$APK" "$GITHUB_WORKSPACE/output/UsahoDen-v139-Pengeluaran-Tanggal-Vertikal.apk"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v138-Pengeluaran-Tanggal-APK
-          path: output/UsahoDen-v138-Pengeluaran-Tanggal.apk
+          name: UsahoDen-v139-Pengeluaran-Tanggal-Vertikal-APK
+          path: output/UsahoDen-v139-Pengeluaran-Tanggal-Vertikal.apk
           if-no-files-found: error
           retention-days: 14
 
