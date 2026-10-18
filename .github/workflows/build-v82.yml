@@ -1,5 +1,5 @@
 
-name: Build UsahoDen v141 - SDK Fix
+name: Build UsahoDen v142 Rincian Pengeluaran Header Fix
 
 on:
   workflow_dispatch:
@@ -11,7 +11,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 45
-
     env:
       ANDROID_HOME: /usr/local/lib/android/sdk
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
@@ -26,86 +25,76 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Locate Android SDK Manager
+      - name: Find preinstalled Android SDK manager
         shell: bash
         run: |
           set -euo pipefail
-
-          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" \
-            -type f -name sdkmanager -print -quit 2>/dev/null || true)"
-
+          SDKMANAGER=""
+          for candidate in \
+            "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager" \
+            "$ANDROID_HOME/cmdline-tools/15.0/bin/sdkmanager" \
+            "$ANDROID_HOME/cmdline-tools/14.0/bin/sdkmanager"; do
+            if [ -x "$candidate" ]; then
+              SDKMANAGER="$candidate"
+              break
+            fi
+          done
           if [ -z "$SDKMANAGER" ]; then
-            echo "::error::sdkmanager tidak ditemukan pada runner."
+            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -perm -u+x -print -quit 2>/dev/null || true)"
+          fi
+          if [ -z "$SDKMANAGER" ] || [ ! -x "$SDKMANAGER" ]; then
+            echo "::error::Android sdkmanager tidak ditemukan."
             exit 1
           fi
-
           echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
-          "$SDKMANAGER" --version
 
-      - name: Accept Android SDK Licenses
+      - name: Accept Android SDK licenses
         shell: bash
         run: |
           set -euo pipefail
-          set +o pipefail
           yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses || true
-          set -o pipefail
 
-      - name: Install Required Android SDK Packages
+      - name: Install required Android SDK packages
         shell: bash
         run: |
           set -euo pipefail
-
           "$SDKMANAGER" --sdk_root="$ANDROID_HOME" \
             "platform-tools" \
             "platforms;android-35" \
             "build-tools;35.0.0"
-
           test -d "$ANDROID_HOME/platforms/android-35"
           test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          test -x "$ANDROID_HOME/build-tools/35.0.0/aapt"
 
       - name: Install Gradle 8.7
         shell: bash
         run: |
           set -euo pipefail
-
-          wget -q \
-            https://services.gradle.org/distributions/gradle-8.7-bin.zip \
-            -O "$RUNNER_TEMP/gradle.zip"
-
+          wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip -O "$RUNNER_TEMP/gradle.zip"
           unzip -q "$RUNNER_TEMP/gradle.zip" -d "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/gradle-8.7/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/gradle-8.7/bin/gradle" --version
 
-      - name: Locate and Extract Source ZIP
+      - name: Extract v142 Source
         shell: bash
         run: |
           set -euo pipefail
-
-          ZIP="$(find . -maxdepth 5 -type f \
-            -iname 'UsahoDen-v141-Rincian-Pengeluaran-Source.zip' \
-            -print -quit)"
-
+          ZIP="$(find . -maxdepth 5 -type f -iname 'UsahoDen-v142-Rincian-Pengeluaran-Header-Fix-Source.zip' -print -quit)"
           if [ -z "$ZIP" ]; then
-            echo "::error::Source ZIP v141 tidak ditemukan."
+            echo "::error::Source ZIP v142 tidak ditemukan."
             exit 1
           fi
-
           mkdir -p "$RUNNER_TEMP/usaho-source"
           unzip -q "$ZIP" -d "$RUNNER_TEMP/usaho-source"
-
-          PROJECT_DIR="$(find "$RUNNER_TEMP/usaho-source" \
-            -type f -path '*/app/build.gradle' \
-            -print -quit | sed 's#/app/build.gradle$##')"
-
+          PROJECT_DIR="$(find "$RUNNER_TEMP/usaho-source" -type f -path '*/app/build.gradle' -print -quit | sed 's#/app/build.gradle$##')"
           if [ -z "$PROJECT_DIR" ]; then
-            echo "::error::Folder proyek Gradle tidak ditemukan."
-            find "$RUNNER_TEMP/usaho-source" \
-              -maxdepth 5 -type f | head -80
+            echo "::error::app/build.gradle tidak ditemukan."
             exit 1
           fi
-
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
-      - name: Prepare Existing Signing Key
+      - name: Decode Existing Signing Key
         shell: bash
         env:
           KEYSTORE_BASE64: ${{ secrets.TOKOKU_KEYSTORE_BASE64 }}
@@ -114,22 +103,13 @@ jobs:
           KEY_PASSWORD: ${{ secrets.TOKOKU_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-
-          if [ -z "${KEYSTORE_BASE64:-}" ] || \
-             [ -z "${KEYSTORE_PASSWORD:-}" ] || \
-             [ -z "${KEY_ALIAS:-}" ]; then
+          if [ -z "${KEYSTORE_BASE64:-}" ] || [ -z "${KEYSTORE_PASSWORD:-}" ] || [ -z "${KEY_ALIAS:-}" ]; then
             echo "::error::Secret keystore lama belum lengkap."
             exit 1
           fi
-
           KEYSTORE="$RUNNER_TEMP/usahoden-existing.jks"
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
-
-          keytool -list \
-            -keystore "$KEYSTORE" \
-            -storepass "$KEYSTORE_PASSWORD" \
-            -alias "$KEY_ALIAS" >/dev/null
-
+          keytool -list -keystore "$KEYSTORE" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
           {
             echo "TOKOKU_KEYSTORE_FILE=$KEYSTORE"
             echo "TOKOKU_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
@@ -142,39 +122,28 @@ jobs:
         run: |
           set -euo pipefail
           cd "$PROJECT_DIR"
-
           gradle --no-daemon --stacktrace :app:assembleRelease
 
-      - name: Verify APK
+      - name: Verify APK and package
         shell: bash
         run: |
           set -euo pipefail
-
           APK="$PROJECT_DIR/app/build/outputs/apk/release/app-release.apk"
-
           if [ ! -s "$APK" ]; then
             echo "::error::APK release tidak ditemukan."
-            find "$PROJECT_DIR" -path '*/build/outputs/apk/*' -type f
             exit 1
           fi
-
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" \
-            verify --verbose "$APK"
-
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" \
-            dump badging "$APK" | tee "$RUNNER_TEMP/apk-info.txt"
-
-          grep -Fq "package: name='com.tokoku.app'" \
-            "$RUNNER_TEMP/apk-info.txt"
-
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee "$RUNNER_TEMP/apk-info.txt"
+          grep -Fq "package: name='com.tokoku.app'" "$RUNNER_TEMP/apk-info.txt"
           mkdir -p output
-          cp "$APK" output/UsahoDen-v141-Rincian-Pengeluaran.apk
+          cp "$APK" output/UsahoDen-v142-Rincian-Pengeluaran-Header-Fix.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v141-Rincian-Pengeluaran-APK
-          path: output/UsahoDen-v141-Rincian-Pengeluaran.apk
+          name: UsahoDen-v142-Rincian-Pengeluaran-Header-Fix-APK
+          path: output/UsahoDen-v142-Rincian-Pengeluaran-Header-Fix.apk
           if-no-files-found: error
           retention-days: 14
 
