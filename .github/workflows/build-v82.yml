@@ -1,11 +1,11 @@
 
-name: Build UsahoDen v146 Belanja Pelanggan Vertikal
+name: Build UsahoDen v147 Rincian Belanja Pelanggan
 
 on:
   workflow_dispatch:
   push:
     paths:
-      - 'UsahoDen-v146-Belanja-Pelanggan-Vertikal-Source.zip'
+      - 'UsahoDen-v147-Rincian-Belanja-Pelanggan-Source.zip'
       - '.github/workflows/build.yml'
 
 permissions:
@@ -73,23 +73,26 @@ jobs:
           unzip -q "$RUNNER_TEMP/gradle.zip" -d "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/gradle-8.7/bin" >> "$GITHUB_PATH"
 
-      - name: Find and extract v146 source ZIP
+      - name: Find and extract v147 source ZIP
         shell: bash
         run: |
           set -euo pipefail
-          ZIP="$(find . -maxdepth 5 -type f -iname 'UsahoDen-v146-Belanja-Pelanggan-Vertikal-Source.zip' -print -quit)"
+          ZIP="$(find . -maxdepth 5 -type f -iname 'UsahoDen-v147-Rincian-Belanja-Pelanggan-Source.zip' -print -quit)"
           if [ -z "$ZIP" ]; then
-            echo "::error::ZIP v146 tidak ditemukan. Upload ZIP source ke root repository."
+            echo "::error::ZIP v147 tidak ditemukan. Upload ZIP source ke root repository."
             find . -maxdepth 5 -type f -iname '*.zip' -print || true
             exit 1
           fi
+
           mkdir -p "$RUNNER_TEMP/usaho-source"
           unzip -q "$ZIP" -d "$RUNNER_TEMP/usaho-source"
+
           PROJECT_DIR="$(find "$RUNNER_TEMP/usaho-source" -type f -path '*/app/build.gradle' -print -quit | sed 's#/app/build.gradle$##')"
           if [ -z "$PROJECT_DIR" ]; then
             echo "::error::app/build.gradle tidak ditemukan."
             exit 1
           fi
+
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
       - name: Decode existing signing keystore
@@ -101,13 +104,20 @@ jobs:
           KEY_PASSWORD: ${{ secrets.TOKOKU_KEY_PASSWORD }}
         run: |
           set -euo pipefail
+
           if [ -z "${KEYSTORE_BASE64:-}" ] || [ -z "${KEYSTORE_PASSWORD:-}" ] || [ -z "${KEY_ALIAS:-}" ]; then
             echo "::error::Secrets keystore lama belum lengkap. Build dihentikan agar tanda tangan tidak berubah."
             exit 1
           fi
+
           KEYSTORE="$RUNNER_TEMP/usahoden-existing.jks"
           echo "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
-          keytool -list -keystore "$KEYSTORE" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
+
+          keytool -list \
+            -keystore "$KEYSTORE" \
+            -storepass "$KEYSTORE_PASSWORD" \
+            -alias "$KEY_ALIAS" >/dev/null
+
           {
             echo "TOKOKU_KEYSTORE_FILE=$KEYSTORE"
             echo "TOKOKU_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
@@ -120,28 +130,36 @@ jobs:
         run: |
           set -euo pipefail
           cd "$PROJECT_DIR"
+
           grep -Fq "applicationId 'com.tokoku.app'" app/build.gradle
-          grep -Eq 'versionCode[[:space:]]+146' app/build.gradle
-          grep -Fq "versionName '3.22.15-v146-belanja-pelanggan-vertikal'" app/build.gradle
+          grep -Eq 'versionCode[[:space:]]+147' app/build.gradle
+          grep -Fq "versionName '3.22.15-v147-rincian-belanja-pelanggan'" app/build.gradle
+
           gradle :app:assembleRelease --no-daemon --stacktrace
 
       - name: Verify APK signature and package
         shell: bash
         run: |
           set -euo pipefail
+
           APK="$PROJECT_DIR/app/build/outputs/apk/release/app-release.apk"
           test -s "$APK"
+
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee "$RUNNER_TEMP/apk-info.txt"
+
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" \
+            | tee "$RUNNER_TEMP/apk-info.txt"
+
           grep -Fq "package: name='com.tokoku.app'" "$RUNNER_TEMP/apk-info.txt"
+
           mkdir -p "$GITHUB_WORKSPACE/output"
-          cp "$APK" "$GITHUB_WORKSPACE/output/UsahoDen-v146-Belanja-Pelanggan-Vertikal.apk"
+          cp "$APK" "$GITHUB_WORKSPACE/output/UsahoDen-v147-Rincian-Belanja-Pelanggan.apk"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v146-Belanja-Pelanggan-Vertikal-APK
-          path: output/UsahoDen-v146-Belanja-Pelanggan-Vertikal.apk
+          name: UsahoDen-v147-Rincian-Belanja-Pelanggan-APK
+          path: output/UsahoDen-v147-Rincian-Belanja-Pelanggan.apk
           if-no-files-found: error
           retention-days: 14
 
