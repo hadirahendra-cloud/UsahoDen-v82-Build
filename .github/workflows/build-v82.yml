@@ -1,11 +1,11 @@
 
-name: Build UsahoDen v149 Hilangkan Ringkasan Belanja
+name: Build UsahoDen v150 Royal Blue Minang Beranda
 
 on:
   workflow_dispatch:
   push:
     paths:
-      - 'UsahoDen-v149-Hilangkan-Ringkasan-Belanja-Header-Detail-Source.zip'
+      - 'UsahoDen-v150-Royal-Blue-Minang-Beranda-Source.zip'
       - '.github/workflows/build.yml'
 
 permissions:
@@ -15,6 +15,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+
     env:
       ANDROID_HOME: /usr/local/lib/android/sdk
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
@@ -36,7 +37,6 @@ jobs:
           SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
           if [ -z "$SDKMANAGER" ]; then
             echo "::error::sdkmanager tidak ditemukan."
-            find /usr/local/lib/android /opt -type f -name sdkmanager -print 2>/dev/null | head -20 || true
             exit 1
           fi
           echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
@@ -73,30 +73,24 @@ jobs:
           unzip -q "$RUNNER_TEMP/gradle.zip" -d "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/gradle-8.7/bin" >> "$GITHUB_PATH"
 
-      - name: Find and extract v149 source ZIP
+      - name: Find and extract v150 source ZIP
         shell: bash
         run: |
           set -euo pipefail
-          ZIP="$(find . -maxdepth 5 -type f -name 'UsahoDen-v149-Hilangkan-Ringkasan-Belanja-Header-Detail-Source.zip' -print -quit)"
-
+          ZIP="$(find . -maxdepth 5 -type f -name 'UsahoDen-v150-Royal-Blue-Minang-Beranda-Source.zip' -print -quit)"
           if [ -z "$ZIP" ]; then
-            echo "::error::Source ZIP v149 tidak ditemukan. Unggah ZIP ke root repositori."
-            find . -maxdepth 5 -type f -iname '*.zip' -print || true
+            echo "::error::Source ZIP v150 tidak ditemukan."
+            find . -type f -iname '*.zip' -print || true
             exit 1
           fi
 
-          if ! unzip -t "$ZIP" >/dev/null 2>&1; then
-            echo "::error::Source ZIP rusak atau tidak lengkap."
-            exit 1
-          fi
-
+          unzip -t "$ZIP" >/dev/null
           mkdir -p "$RUNNER_TEMP/usaho-source"
           unzip -q "$ZIP" -d "$RUNNER_TEMP/usaho-source"
 
           PROJECT_DIR="$(find "$RUNNER_TEMP/usaho-source" -type f -path '*/app/build.gradle' -print -quit | sed 's#/app/build.gradle$##')"
-
           if [ -z "$PROJECT_DIR" ]; then
-            echo "::error::app/build.gradle tidak ditemukan di dalam ZIP."
+            echo "::error::app/build.gradle tidak ditemukan."
             exit 1
           fi
 
@@ -113,7 +107,7 @@ jobs:
           set -euo pipefail
 
           if [ -z "${KEYSTORE_BASE64:-}" ] || [ -z "${KEYSTORE_PASSWORD:-}" ] || [ -z "${KEY_ALIAS:-}" ]; then
-            echo "::error::Secrets keystore lama belum lengkap. Build dihentikan agar tanda tangan tidak berubah."
+            echo "::error::Secrets keystore lama belum lengkap."
             exit 1
           fi
 
@@ -139,8 +133,8 @@ jobs:
           cd "$PROJECT_DIR"
 
           grep -Fq "applicationId 'com.tokoku.app'" app/build.gradle
-          grep -Eq 'versionCode[[:space:]]+149' app/build.gradle
-          grep -Fq "versionName '3.22.15-v149-hilangkan-ringkasan-belanja-header-detail'" app/build.gradle
+          grep -Eq 'versionCode[[:space:]]+150' app/build.gradle
+          grep -Fq "versionName '3.22.15-v150-royal-blue-minang-beranda'" app/build.gradle
 
           gradle :app:assembleRelease --no-daemon --stacktrace
 
@@ -160,13 +154,13 @@ jobs:
           grep -Fq "package: name='com.tokoku.app'" "$RUNNER_TEMP/apk-info.txt"
 
           mkdir -p "$GITHUB_WORKSPACE/output"
-          cp "$APK" "$GITHUB_WORKSPACE/output/UsahoDen-v149-Hilangkan-Ringkasan-Belanja-Header-Detail.apk"
+          cp "$APK" "$GITHUB_WORKSPACE/output/UsahoDen-v150-Royal-Blue-Minang-Beranda.apk"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v149-Hilangkan-Ringkasan-Belanja-Header-Detail-APK
-          path: output/UsahoDen-v149-Hilangkan-Ringkasan-Belanja-Header-Detail.apk
+          name: UsahoDen-v150-Royal-Blue-Minang-Beranda-APK
+          path: output/UsahoDen-v150-Royal-Blue-Minang-Beranda.apk
           if-no-files-found: error
           retention-days: 14
 
