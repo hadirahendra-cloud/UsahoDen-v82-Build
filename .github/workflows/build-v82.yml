@@ -32,7 +32,6 @@ jobs:
 
           if [ -z "$ZIP_FILE" ]; then
             echo "Source ZIP v152 tidak ditemukan."
-            echo "Unggah ZIP v152 ke repository GitHub."
             exit 1
           fi
 
@@ -40,18 +39,12 @@ jobs:
           unzip -q "$ZIP_FILE" -d tokoku-project
 
           PROJECT_DIR="$(find tokoku-project -type f \
-            -path '*/app/build.gradle' \
+            \( -path '*/app/build.gradle' -o \
+               -path '*/app/build.gradle.kts' \) \
             -printf '%h\n' -quit | sed 's#/app$##')"
 
           if [ -z "$PROJECT_DIR" ]; then
-            PROJECT_DIR="$(find tokoku-project -type f \
-              -path '*/app/build.gradle.kts' \
-              -printf '%h\n' -quit | sed 's#/app$##')"
-          fi
-
-          if [ -z "$PROJECT_DIR" ]; then
-            echo "File Gradle modul app tidak ditemukan."
-            echo "Periksa struktur ZIP sumber."
+            echo "File build.gradle modul app tidak ditemukan."
             exit 1
           fi
 
@@ -64,20 +57,36 @@ jobs:
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
           echo "Proyek ditemukan: $PROJECT_DIR"
 
-      - name: Set up Android SDK - PATOKAN SDK ABANG
+      - name: Set up Java Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK packages
+      - name: Install Android SDK - PATOKAN SDK ABANG
         shell: bash
         run: |
           set -euo pipefail
 
-          yes | sdkmanager --licenses || true
+          SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
 
-          sdkmanager \
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" \
+              -type f -name sdkmanager -print -quit)"
+          fi
+
+          if [ -z "$SDKMANAGER" ] || [ ! -x "$SDKMANAGER" ]; then
+            echo "sdkmanager tidak ditemukan."
+            exit 1
+          fi
+
+          yes | "$SDKMANAGER" --licenses || true
+
+          "$SDKMANAGER" \
             'platform-tools' \
             'platforms;android-35' \
             'build-tools;35.0.0'
+
+          test -d "$ANDROID_HOME/platform-tools"
+          test -d "$ANDROID_HOME/platforms/android-35"
+          test -d "$ANDROID_HOME/build-tools/35.0.0"
 
       - name: Set up Gradle 8.7
         uses: gradle/actions/setup-gradle@v4
