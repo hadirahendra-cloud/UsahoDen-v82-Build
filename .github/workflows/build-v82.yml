@@ -26,28 +26,35 @@ jobs:
         run: |
           set -euo pipefail
 
-          ZIP_FILE="$(find . -maxdepth 3 -type f -iname '*v152*Riwayat*Tombol*Kembali*.zip' -print -quit)"
+          ZIP_FILE="$(find . -maxdepth 3 -type f \
+            -iname '*UsahoDen-v152*.zip' -print -quit)"
 
           if [ -z "$ZIP_FILE" ]; then
-            ZIP_FILE="$(find . -maxdepth 3 -type f -iname '*.zip' -print -quit)"
-          fi
-
-          if [ -z "$ZIP_FILE" ]; then
-            echo "Source ZIP tidak ditemukan di repository."
+            echo "ZIP UsahoDen v152 tidak ditemukan."
+            echo "Unggah ZIP v152 ke repository terlebih dahulu."
             exit 1
           fi
 
           mkdir -p tokoku-project
           unzip -q "$ZIP_FILE" -d tokoku-project
 
-          PROJECT_DIR="$(find tokoku-project -type f -name gradlew -printf '%h\n' -quit)"
+          PROJECT_DIR="$(find tokoku-project \
+            -type f -path '*/app/build.gradle' \
+            -printf '%h\n' -quit | sed 's#/app$##')"
 
           if [ -z "$PROJECT_DIR" ]; then
-            echo "gradlew tidak ditemukan di dalam ZIP sumber."
+            echo "File app/build.gradle tidak ditemukan."
+            exit 1
+          fi
+
+          if [ ! -f "$PROJECT_DIR/settings.gradle" ] && \
+             [ ! -f "$PROJECT_DIR/settings.gradle.kts" ]; then
+            echo "File settings.gradle tidak ditemukan."
             exit 1
           fi
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "Proyek ditemukan: $PROJECT_DIR"
 
       - name: Set up Android SDK - PATOKAN SDK ABANG
         uses: android-actions/setup-android@v3
@@ -57,12 +64,17 @@ jobs:
         run: |
           set -euo pipefail
 
-          yes | sdkmanager --licenses >/dev/null || true
+          yes | sdkmanager --licenses || true
 
           sdkmanager \
             'platform-tools' \
             'platforms;android-35' \
             'build-tools;35.0.0'
+
+      - name: Set up Gradle 8.7
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
 
       - name: Build Debug APK
         shell: bash
@@ -70,15 +82,17 @@ jobs:
           set -euo pipefail
 
           cd "$PROJECT_DIR"
-          chmod +x ./gradlew
-          ./gradlew --no-daemon assembleDebug
+
+          gradle --version
+          gradle --no-daemon assembleDebug
 
       - name: Prepare APK artifact
         shell: bash
         run: |
           set -euo pipefail
 
-          APK="$(find "$PROJECT_DIR" -type f -path '*/build/outputs/apk/debug/*.apk' -print -quit)"
+          APK="$(find "$PROJECT_DIR/app/build/outputs/apk/debug" \
+            -type f -name '*.apk' -print -quit)"
 
           if [ -z "$APK" ]; then
             echo "APK debug tidak ditemukan."
@@ -93,3 +107,4 @@ jobs:
         with:
           name: UsahoDen-v152-debug
           path: output/UsahoDen-v152-debug.apk
+          if-no-files-found: error
