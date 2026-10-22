@@ -1,5 +1,5 @@
 
-name: Build UsahoDen v152 - Riwayat Tombol Kembali Sejajar
+name: Build UsahoDen v152 - Riwayat Transaksi
 
 on:
   workflow_dispatch:
@@ -15,41 +15,49 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Java 17
+      - name: Set up Java Temurin 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Locate and extract UsahoDen source ZIP
+      - name: Locate and extract UsahoDen v152 source ZIP
         shell: bash
         run: |
           set -euo pipefail
 
-          ZIP_FILE="$(find . -maxdepth 3 -type f \
-            -iname '*UsahoDen-v152*.zip' -print -quit)"
+          ZIP_FILE="$(find . -maxdepth 4 -type f \
+            -iname '*UsahoDen-v152-Riwayat-Tombol-Kembali-Sejajar-Source.zip' \
+            -print -quit)"
 
           if [ -z "$ZIP_FILE" ]; then
-            echo "ZIP UsahoDen v152 tidak ditemukan."
-            echo "Unggah ZIP v152 ke repository terlebih dahulu."
+            echo "Source ZIP v152 tidak ditemukan."
+            echo "Unggah ZIP v152 ke repository GitHub."
             exit 1
           fi
 
           mkdir -p tokoku-project
           unzip -q "$ZIP_FILE" -d tokoku-project
 
-          PROJECT_DIR="$(find tokoku-project \
-            -type f -path '*/app/build.gradle' \
+          PROJECT_DIR="$(find tokoku-project -type f \
+            -path '*/app/build.gradle' \
             -printf '%h\n' -quit | sed 's#/app$##')"
 
           if [ -z "$PROJECT_DIR" ]; then
-            echo "File app/build.gradle tidak ditemukan."
+            PROJECT_DIR="$(find tokoku-project -type f \
+              -path '*/app/build.gradle.kts' \
+              -printf '%h\n' -quit | sed 's#/app$##')"
+          fi
+
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "File Gradle modul app tidak ditemukan."
+            echo "Periksa struktur ZIP sumber."
             exit 1
           fi
 
           if [ ! -f "$PROJECT_DIR/settings.gradle" ] && \
              [ ! -f "$PROJECT_DIR/settings.gradle.kts" ]; then
-            echo "File settings.gradle tidak ditemukan."
+            echo "settings.gradle tidak ditemukan."
             exit 1
           fi
 
@@ -59,7 +67,7 @@ jobs:
       - name: Set up Android SDK - PATOKAN SDK ABANG
         uses: android-actions/setup-android@v3
 
-      - name: Install required Android SDK packages
+      - name: Install Android SDK packages
         shell: bash
         run: |
           set -euo pipefail
@@ -82,17 +90,17 @@ jobs:
           set -euo pipefail
 
           cd "$PROJECT_DIR"
-
           gradle --version
           gradle --no-daemon assembleDebug
 
-      - name: Prepare APK artifact
+      - name: Locate APK
         shell: bash
         run: |
           set -euo pipefail
 
-          APK="$(find "$PROJECT_DIR/app/build/outputs/apk/debug" \
-            -type f -name '*.apk' -print -quit)"
+          APK="$(find "$PROJECT_DIR/app/build/outputs/apk" \
+            -type f -name '*.apk' \
+            -path '*/debug/*' -print -quit)"
 
           if [ -z "$APK" ]; then
             echo "APK debug tidak ditemukan."
@@ -102,7 +110,7 @@ jobs:
           mkdir -p output
           cp "$APK" output/UsahoDen-v152-debug.apk
 
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: UsahoDen-v152-debug
