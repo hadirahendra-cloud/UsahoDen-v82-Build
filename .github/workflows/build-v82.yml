@@ -32,7 +32,6 @@ jobs:
 
           if [ -z "$ZIP_FILE" ]; then
             echo "Source ZIP v152 tidak ditemukan."
-            echo "Unggah ZIP v152 ke repository GitHub."
             exit 1
           fi
 
@@ -46,7 +45,6 @@ jobs:
 
           if [ -z "$PROJECT_DIR" ]; then
             echo "Gradle modul app tidak ditemukan."
-            echo "Periksa isi source ZIP."
             exit 1
           fi
 
@@ -59,29 +57,44 @@ jobs:
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
           echo "Proyek ditemukan: $PROJECT_DIR"
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Install Android SDK command-line tools manually
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          SDK_ROOT="$RUNNER_TEMP/android-sdk"
+          TOOLS_DIR="$SDK_ROOT/cmdline-tools"
+          mkdir -p "$TOOLS_DIR"
+
+          curl --fail --location --retry 3 \
+            "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip" \
+            -o "$RUNNER_TEMP/android-tools.zip"
+
+          mkdir -p "$RUNNER_TEMP/android-tools"
+          unzip -q "$RUNNER_TEMP/android-tools.zip" \
+            -d "$RUNNER_TEMP/android-tools"
+
+          mkdir -p "$TOOLS_DIR/latest"
+          cp -a "$RUNNER_TEMP/android-tools/cmdline-tools/." \
+            "$TOOLS_DIR/latest/"
+
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "$TOOLS_DIR/latest/bin" >> "$GITHUB_PATH"
+          echo "$SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
 
       - name: Install Android SDK - PATOKAN SDK ABANG
         shell: bash
         run: |
           set -euo pipefail
 
-          SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
 
-          if [ ! -x "$SDKMANAGER" ]; then
-            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" \
-              -type f -name sdkmanager -print -quit)"
-          fi
-
-          if [ -z "$SDKMANAGER" ] || [ ! -x "$SDKMANAGER" ]; then
-            echo "sdkmanager tidak ditemukan."
-            exit 1
-          fi
-
-          yes | "$SDKMANAGER" --licenses || true
+          yes | "$SDKMANAGER" \
+            --sdk_root="$ANDROID_HOME" --licenses
 
           "$SDKMANAGER" \
+            --sdk_root="$ANDROID_HOME" \
             'platform-tools' \
             'platforms;android-35' \
             'build-tools;35.0.0'
