@@ -1,5 +1,5 @@
 
-name: Build UsahoDen v152 - Nama Kiri Kembali Kanan
+name: Build UsahoDen v153 - Penjualan Kembali Kanan
 
 on:
   workflow_dispatch:
@@ -21,17 +21,17 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Locate and extract source ZIP v152
+      - name: Locate and extract source ZIP v153
         shell: bash
         run: |
           set -euo pipefail
 
           ZIP_FILE="$(find . -maxdepth 5 -type f \
-            -iname '*UsahoDen-v152-Riwayat-Nama-Kiri-Kembali-Kanan-Source.zip' \
+            -iname '*UsahoDen-v153-Penjualan-Kembali-Kanan-Source.zip' \
             -print -quit)"
 
           if [ -z "$ZIP_FILE" ]; then
-            echo "Source ZIP v152 tidak ditemukan."
+            echo "Source ZIP v153 tidak ditemukan."
             exit 1
           fi
 
@@ -55,6 +55,7 @@ jobs:
           fi
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "Proyek ditemukan: $PROJECT_DIR"
 
       - name: Install Android SDK command-line tools
         shell: bash
@@ -173,11 +174,11 @@ jobs:
             verify --verbose "$APK"
 
           mkdir -p output
-          cp "$APK" output/UsahoDen-v152-release.apk
+          cp "$APK" output/UsahoDen-v153-release.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v152-release
-          path: output/UsahoDen-v152-release.apk
+          name: UsahoDen-v153-release
+          path: output/UsahoDen-v153-release.apk
           if-no-files-found: error
