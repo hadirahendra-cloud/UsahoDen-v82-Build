@@ -91,7 +91,7 @@ jobs:
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
 
           yes | "$SDKMANAGER" \
-            --sdk_root="$ANDROID_HOME" --licenses
+            --sdk_root="$ANDROID_HOME" --licenses || true
 
           "$SDKMANAGER" \
             --sdk_root="$ANDROID_HOME" \
