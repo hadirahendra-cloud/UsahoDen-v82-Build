@@ -57,20 +57,16 @@ jobs:
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
           echo "Proyek ditemukan: $PROJECT_DIR"
 
-      - name: Set up Android SDK
+      - name: Set up Android SDK - PATOKAN V151
         uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK - PATOKAN SDK ABANG
+      - name: Install Android SDK packages
         shell: bash
         run: |
           set -euo pipefail
 
-          SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
-
-          if [ ! -x "$SDKMANAGER" ]; then
-            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" \
-              -type f -name sdkmanager -print -quit)"
-          fi
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" \
+            -type f -name sdkmanager -print -quit)"
 
           if [ -z "$SDKMANAGER" ] || [ ! -x "$SDKMANAGER" ]; then
             echo "sdkmanager tidak ditemukan."
@@ -95,26 +91,38 @@ jobs:
         with:
           gradle-version: '8.7'
 
-      - name: Build Release APK
+      - name: Decode existing signing keystore
         shell: bash
         env:
           KEYSTORE_BASE64: ${{ secrets.TOKOKU_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "Secret TOKOKU_KEYSTORE_BASE64 belum tersedia."
+            exit 1
+          fi
+
+          printf '%s' "$KEYSTORE_BASE64" \
+            | base64 --decode > "$RUNNER_TEMP/usahoden-release.jks"
+
+          test -s "$RUNNER_TEMP/usahoden-release.jks"
+
+      - name: Build signed Release APK
+        shell: bash
+        env:
           KEYSTORE_PASSWORD: ${{ secrets.TOKOKU_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.TOKOKU_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.TOKOKU_KEY_PASSWORD }}
         run: |
           set -euo pipefail
 
-          if [ -z "$KEYSTORE_BASE64" ] || \
-             [ -z "$KEYSTORE_PASSWORD" ] || \
+          if [ -z "$KEYSTORE_PASSWORD" ] || \
              [ -z "$KEY_ALIAS" ] || \
              [ -z "$KEY_PASSWORD" ]; then
-            echo "GitHub Secrets keystore lama belum lengkap."
+            echo "GitHub Secrets penandatanganan belum lengkap."
             exit 1
           fi
-
-          printf '%s' "$KEYSTORE_BASE64" \
-            | base64 --decode > "$RUNNER_TEMP/usahoden-release.jks"
 
           cd "$PROJECT_DIR"
 
