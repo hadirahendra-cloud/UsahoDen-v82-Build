@@ -1,5 +1,5 @@
 
-name: Build UsahoDen v153 - Penjualan Kembali Kanan
+name: Build UsahoDen v153 - Fix Login Penjualan
 
 on:
   workflow_dispatch:
@@ -21,17 +21,18 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Locate and extract source ZIP v153
+      - name: Locate and extract source ZIP v153 FIX LOGIN
         shell: bash
         run: |
           set -euo pipefail
 
           ZIP_FILE="$(find . -maxdepth 5 -type f \
-            -iname '*UsahoDen-v153-Penjualan-Kembali-Kanan-Source.zip' \
+            -iname '*UsahoDen-v153-Penjualan-Kembali-Kanan-Source-FIX-Login.zip' \
             -print -quit)"
 
           if [ -z "$ZIP_FILE" ]; then
-            echo "Source ZIP v153 tidak ditemukan."
+            echo "Source ZIP v153 FIX LOGIN tidak ditemukan."
+            echo "Unggah ZIP perbaikan login ke repository."
             exit 1
           fi
 
@@ -122,7 +123,7 @@ jobs:
           set -euo pipefail
 
           if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "Secret keystore lama tidak tersedia."
+            echo "Secret TOKOKU_KEYSTORE_BASE64 belum tersedia."
             exit 1
           fi
 
@@ -174,11 +175,11 @@ jobs:
             verify --verbose "$APK"
 
           mkdir -p output
-          cp "$APK" output/UsahoDen-v153-release.apk
+          cp "$APK" output/UsahoDen-v153-FIX-Login-release.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v153-release
-          path: output/UsahoDen-v153-release.apk
+          name: UsahoDen-v153-FIX-Login
+          path: output/UsahoDen-v153-FIX-Login-release.apk
           if-no-files-found: error
