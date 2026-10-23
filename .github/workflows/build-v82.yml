@@ -55,26 +55,48 @@ jobs:
           fi
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-          echo "Proyek ditemukan: $PROJECT_DIR"
 
-      - name: Set up Android SDK - PATOKAN V151
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK packages
+      - name: Install Android SDK command-line tools
         shell: bash
         run: |
           set -euo pipefail
 
-          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" \
-            -type f -name sdkmanager -print -quit)"
+          SDK_ROOT="$RUNNER_TEMP/android-sdk"
+          mkdir -p "$RUNNER_TEMP/android-tools"
 
-          if [ -z "$SDKMANAGER" ] || [ ! -x "$SDKMANAGER" ]; then
-            echo "sdkmanager tidak ditemukan."
+          curl --fail --location --retry 3 \
+            "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip" \
+            -o "$RUNNER_TEMP/android-tools.zip"
+
+          unzip -q "$RUNNER_TEMP/android-tools.zip" \
+            -d "$RUNNER_TEMP/android-tools"
+
+          mkdir -p "$SDK_ROOT/cmdline-tools/latest"
+          cp -a "$RUNNER_TEMP/android-tools/cmdline-tools/." \
+            "$SDK_ROOT/cmdline-tools/latest/"
+
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "$SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "$SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
+
+      - name: Accept SDK licenses and install packages
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+
+          set +e
+          yes | "$SDKMANAGER" \
+            --sdk_root="$ANDROID_HOME" --licenses
+          SDK_STATUS=${PIPESTATUS[1]}
+          set -e
+
+          if [ "$SDK_STATUS" -ne 0 ]; then
+            echo "Penerimaan lisensi SDK gagal."
             exit 1
           fi
-
-          yes | "$SDKMANAGER" \
-            --sdk_root="$ANDROID_HOME" --licenses || true
 
           "$SDKMANAGER" \
             --sdk_root="$ANDROID_HOME" \
@@ -99,7 +121,7 @@ jobs:
           set -euo pipefail
 
           if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "Secret TOKOKU_KEYSTORE_BASE64 belum tersedia."
+            echo "Secret keystore lama tidak tersedia."
             exit 1
           fi
 
@@ -108,7 +130,7 @@ jobs:
 
           test -s "$RUNNER_TEMP/usahoden-release.jks"
 
-      - name: Build signed Release APK
+      - name: Build Release APK
         shell: bash
         env:
           KEYSTORE_PASSWORD: ${{ secrets.TOKOKU_KEYSTORE_PASSWORD }}
@@ -147,14 +169,8 @@ jobs:
             exit 1
           fi
 
-          APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
-
-          if [ ! -x "$APKSIGNER" ]; then
-            echo "apksigner tidak ditemukan."
-            exit 1
-          fi
-
-          "$APKSIGNER" verify --verbose "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" \
+            verify --verbose "$APK"
 
           mkdir -p output
           cp "$APK" output/UsahoDen-v152-release.apk
