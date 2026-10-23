@@ -1,5 +1,5 @@
 
-name: Build UsahoDen v152 - Riwayat Transaksi
+name: Build UsahoDen v152 - Nama Kiri Kembali Kanan
 
 on:
   workflow_dispatch:
@@ -21,17 +21,18 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Locate and extract UsahoDen v152 source ZIP
+      - name: Locate and extract source ZIP v152
         shell: bash
         run: |
           set -euo pipefail
 
-          ZIP_FILE="$(find . -maxdepth 4 -type f \
-            -iname '*UsahoDen-v152-Riwayat-Tombol-Kembali-Sejajar-Source.zip' \
+          ZIP_FILE="$(find . -maxdepth 5 -type f \
+            -iname '*UsahoDen-v152-Riwayat-Nama-Kiri-Kembali-Kanan-Source.zip' \
             -print -quit)"
 
           if [ -z "$ZIP_FILE" ]; then
             echo "Source ZIP v152 tidak ditemukan."
+            echo "Unggah ZIP v152 ke repository GitHub."
             exit 1
           fi
 
@@ -44,7 +45,8 @@ jobs:
             -printf '%h\n' -quit | sed 's#/app$##')"
 
           if [ -z "$PROJECT_DIR" ]; then
-            echo "File build.gradle modul app tidak ditemukan."
+            echo "Gradle modul app tidak ditemukan."
+            echo "Periksa isi source ZIP."
             exit 1
           fi
 
@@ -57,7 +59,7 @@ jobs:
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
           echo "Proyek ditemukan: $PROJECT_DIR"
 
-      - name: Set up Java Android SDK
+      - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
       - name: Install Android SDK - PATOKAN SDK ABANG
