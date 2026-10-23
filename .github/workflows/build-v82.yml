@@ -57,38 +57,25 @@ jobs:
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
           echo "Proyek ditemukan: $PROJECT_DIR"
 
-      - name: Install Android SDK command-line tools manually
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          SDK_ROOT="$RUNNER_TEMP/android-sdk"
-          TOOLS_DIR="$SDK_ROOT/cmdline-tools"
-          mkdir -p "$TOOLS_DIR"
-
-          curl --fail --location --retry 3 \
-            "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip" \
-            -o "$RUNNER_TEMP/android-tools.zip"
-
-          mkdir -p "$RUNNER_TEMP/android-tools"
-          unzip -q "$RUNNER_TEMP/android-tools.zip" \
-            -d "$RUNNER_TEMP/android-tools"
-
-          mkdir -p "$TOOLS_DIR/latest"
-          cp -a "$RUNNER_TEMP/android-tools/cmdline-tools/." \
-            "$TOOLS_DIR/latest/"
-
-          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
-          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
-          echo "$TOOLS_DIR/latest/bin" >> "$GITHUB_PATH"
-          echo "$SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
 
       - name: Install Android SDK - PATOKAN SDK ABANG
         shell: bash
         run: |
           set -euo pipefail
 
-          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" \
+              -type f -name sdkmanager -print -quit)"
+          fi
+
+          if [ -z "$SDKMANAGER" ] || [ ! -x "$SDKMANAGER" ]; then
+            echo "sdkmanager tidak ditemukan."
+            exit 1
+          fi
 
           yes | "$SDKMANAGER" \
             --sdk_root="$ANDROID_HOME" --licenses || true
@@ -108,35 +95,65 @@ jobs:
         with:
           gradle-version: '8.7'
 
-      - name: Build Debug APK
+      - name: Build Release APK
         shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.TOKOKU_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.TOKOKU_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.TOKOKU_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.TOKOKU_KEY_PASSWORD }}
         run: |
           set -euo pipefail
 
-          cd "$PROJECT_DIR"
-          gradle --version
-          gradle --no-daemon assembleDebug
-
-      - name: Locate APK
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          APK="$(find "$PROJECT_DIR/app/build/outputs/apk" \
-            -type f -name '*.apk' \
-            -path '*/debug/*' -print -quit)"
-
-          if [ -z "$APK" ]; then
-            echo "APK debug tidak ditemukan."
+          if [ -z "$KEYSTORE_BASE64" ] || \
+             [ -z "$KEYSTORE_PASSWORD" ] || \
+             [ -z "$KEY_ALIAS" ] || \
+             [ -z "$KEY_PASSWORD" ]; then
+            echo "GitHub Secrets keystore lama belum lengkap."
             exit 1
           fi
 
+          printf '%s' "$KEYSTORE_BASE64" \
+            | base64 --decode > "$RUNNER_TEMP/usahoden-release.jks"
+
+          cd "$PROJECT_DIR"
+
+          gradle --version
+
+          gradle --no-daemon assembleRelease \
+            -Pandroid.injected.signing.store.file="$RUNNER_TEMP/usahoden-release.jks" \
+            -Pandroid.injected.signing.store.password="$KEYSTORE_PASSWORD" \
+            -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
+            -Pandroid.injected.signing.key.password="$KEY_PASSWORD"
+
+      - name: Verify and prepare APK
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          APK="$(find "$PROJECT_DIR/app/build/outputs/apk/release" \
+            -type f -name '*.apk' -print -quit)"
+
+          if [ -z "$APK" ]; then
+            echo "APK release tidak ditemukan."
+            exit 1
+          fi
+
+          APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+
+          if [ ! -x "$APKSIGNER" ]; then
+            echo "apksigner tidak ditemukan."
+            exit 1
+          fi
+
+          "$APKSIGNER" verify --verbose "$APK"
+
           mkdir -p output
-          cp "$APK" output/UsahoDen-v152-debug.apk
+          cp "$APK" output/UsahoDen-v152-release.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v152-debug
-          path: output/UsahoDen-v152-debug.apk
+          name: UsahoDen-v152-release
+          path: output/UsahoDen-v152-release.apk
           if-no-files-found: error
