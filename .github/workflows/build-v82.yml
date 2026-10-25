@@ -1,5 +1,5 @@
 
-name: Build UsahoDen v156 - Nota Thermal Rapi
+name: Build UsahoDen v156 - Pengaturan Printer Manual
 
 on:
   workflow_dispatch:
@@ -28,11 +28,11 @@ jobs:
           set -euo pipefail
 
           ZIP_FILE="$(find . -maxdepth 5 -type f \
-            -iname 'UsahoDen-v156-Nota-Thermal-Rapi-Source.zip' \
+            -iname 'UsahoDen-v156-Pengaturan-Printer-Manual-Source.zip' \
             -print -quit)"
 
           if [ -z "$ZIP_FILE" ]; then
-            echo "Source ZIP v156 tidak ditemukan di repository."
+            echo "Source ZIP v156 tidak ditemukan."
             find . -maxdepth 5 -type f -iname '*.zip' -print || true
             exit 1
           fi
@@ -40,18 +40,20 @@ jobs:
           mkdir -p "$RUNNER_TEMP/usaho-source"
           unzip -q "$ZIP_FILE" -d "$RUNNER_TEMP/usaho-source"
 
-          PROJECT_DIR="$(find "$RUNNER_TEMP/usaho-source" -type f \
-            -path '*/app/build.gradle' \
-            -print -quit | sed 's#/app/build.gradle$##')"
+          PROJECT_DIR="$RUNNER_TEMP/usaho-source"
 
-          if [ -z "$PROJECT_DIR" ]; then
+          if [ ! -f "$PROJECT_DIR/app/build.gradle" ] && \
+             [ ! -f "$PROJECT_DIR/app/build.gradle.kts" ]; then
             PROJECT_DIR="$(find "$RUNNER_TEMP/usaho-source" -type f \
-              -path '*/app/build.gradle.kts' \
-              -print -quit | sed 's#/app/build.gradle.kts$##')"
+              \( -path '*/app/build.gradle' -o \
+                 -path '*/app/build.gradle.kts' \) \
+              -print -quit | sed -E 's#/app/build.gradle(\.kts)?$##')"
           fi
 
-          if [ -z "$PROJECT_DIR" ]; then
-            echo "File Gradle modul app tidak ditemukan."
+          if [ -z "$PROJECT_DIR" ] || \
+             { [ ! -f "$PROJECT_DIR/app/build.gradle" ] && \
+               [ ! -f "$PROJECT_DIR/app/build.gradle.kts" ]; }; then
+            echo "Gradle modul app tidak ditemukan."
             exit 1
           fi
 
@@ -96,8 +98,6 @@ jobs:
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           mkdir -p "$ANDROID_HOME/licenses"
 
-          # Kirim jawaban persetujuan tanpa menghentikan workflow
-          # akibat Broken pipe saat sdkmanager menutup input.
           for i in $(seq 1 20); do
             printf 'y\n'
           done > "$RUNNER_TEMP/sdk-licenses.txt"
@@ -146,7 +146,9 @@ jobs:
           fi
 
           KEYSTORE="$RUNNER_TEMP/usahoden-existing.jks"
-          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
+
+          printf '%s' "$KEYSTORE_BASE64" \
+            | base64 --decode > "$KEYSTORE"
 
           keytool -list \
             -keystore "$KEYSTORE" \
@@ -170,8 +172,15 @@ jobs:
           echo "Memeriksa konfigurasi versi v156..."
 
           grep -Eq 'versionCode[[:space:]]+156' app/build.gradle
-          grep -Fq "3.22.16-v156-nota-thermal-rapi" app/build.gradle
-          grep -Fq 'v156' app/src/main/assets/index.html
+          grep -Fq \
+            "3.22.16-v156-pengaturan-printer-manual" \
+            app/build.gradle
+
+          grep -Fq 'printerLogoMode' \
+            app/src/main/assets/index.html
+
+          grep -Fq 'final String compactText' \
+            app/src/main/java/com/tokoku/app/MainActivity.java
 
           gradle --no-daemon assembleRelease --stacktrace \
             -Pandroid.injected.signing.store.file="$TOKOKU_KEYSTORE_FILE" \
@@ -196,13 +205,15 @@ jobs:
             verify --verbose "$APK"
 
           mkdir -p output
-          cp "$APK" output/UsahoDen-v156-Nota-Thermal-Rapi.apk
+
+          cp "$APK" \
+            output/UsahoDen-v156-Pengaturan-Printer-Manual.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v156-Nota-Thermal-Rapi
-          path: output/UsahoDen-v156-Nota-Thermal-Rapi.apk
+          name: UsahoDen-v156-Pengaturan-Printer-Manual
+          path: output/UsahoDen-v156-Pengaturan-Printer-Manual.apk
           if-no-files-found: error
           retention-days: 14
 
