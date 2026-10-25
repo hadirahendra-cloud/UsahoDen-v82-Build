@@ -1,5 +1,5 @@
 
-name: Build UsahoDen v155 - Nota Thermal Logo RangMudo
+name: Build UsahoDen v156 - Nota Thermal Rapi
 
 on:
   workflow_dispatch:
@@ -22,17 +22,17 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Locate and extract source ZIP v155
+      - name: Locate and extract source ZIP v156
         shell: bash
         run: |
           set -euo pipefail
 
           ZIP_FILE="$(find . -maxdepth 5 -type f \
-            -iname 'UsahoDen-v155-Nota-Thermal-Logo-Source.zip' \
+            -iname 'UsahoDen-v156-Nota-Thermal-Rapi-Source.zip' \
             -print -quit)"
 
           if [ -z "$ZIP_FILE" ]; then
-            echo "Source ZIP v155 tidak ditemukan. Unggah ZIP v155 ke repository."
+            echo "Source ZIP v156 tidak ditemukan."
             find . -maxdepth 5 -type f -iname '*.zip' -print || true
             exit 1
           fi
@@ -41,7 +41,8 @@ jobs:
           unzip -q "$ZIP_FILE" -d "$RUNNER_TEMP/usaho-source"
 
           PROJECT_DIR="$(find "$RUNNER_TEMP/usaho-source" -type f \
-            -path '*/app/build.gradle' -print -quit | sed 's#/app/build.gradle$##')"
+            -path '*/app/build.gradle' -print -quit \
+            | sed 's#/app/build.gradle$##')"
 
           if [ -z "$PROJECT_DIR" ]; then
             echo "app/build.gradle tidak ditemukan di ZIP."
@@ -69,7 +70,8 @@ jobs:
             -o "$RUNNER_TEMP/android-tools.zip"
 
           mkdir -p "$RUNNER_TEMP/android-tools"
-          unzip -q "$RUNNER_TEMP/android-tools.zip" -d "$RUNNER_TEMP/android-tools"
+          unzip -q "$RUNNER_TEMP/android-tools.zip" \
+            -d "$RUNNER_TEMP/android-tools"
 
           mkdir -p "$SDK_ROOT/cmdline-tools/latest"
           cp -a "$RUNNER_TEMP/android-tools/cmdline-tools/." \
@@ -88,7 +90,8 @@ jobs:
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
 
           set +o pipefail
-          yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses || true
+          yes | "$SDKMANAGER" \
+            --sdk_root="$ANDROID_HOME" --licenses || true
           set -o pipefail
 
       - name: Install Android SDK packages - PATOKAN ABANG
@@ -131,7 +134,9 @@ jobs:
           fi
 
           KEYSTORE="$RUNNER_TEMP/usahoden-existing.jks"
-          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
+
+          printf '%s' "$KEYSTORE_BASE64" \
+            | base64 --decode > "$KEYSTORE"
 
           keytool -list \
             -keystore "$KEYSTORE" \
@@ -152,9 +157,14 @@ jobs:
 
           cd "$PROJECT_DIR"
 
-          grep -Eq 'versionCode[[:space:]]+155' app/build.gradle
-          grep -Fq "versionName '3.22.15-v155-nota-thermal-logo'" app/build.gradle
-          grep -Fq '<span>v155</span>' app/src/main/assets/index.html
+          grep -Eq 'versionCode[[:space:]]+156' app/build.gradle
+
+          grep -Fq \
+            "versionName '3.22.16-v156-nota-thermal-rapi'" \
+            app/build.gradle
+
+          grep -Fq '<span>v156</span>' \
+            app/src/main/assets/index.html
 
           gradle --no-daemon assembleRelease --stacktrace \
             -Pandroid.injected.signing.store.file="$TOKOKU_KEYSTORE_FILE" \
@@ -175,16 +185,19 @@ jobs:
             exit 1
           fi
 
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" \
+            verify --verbose "$APK"
 
           mkdir -p output
-          cp "$APK" output/UsahoDen-v155-Nota-Thermal-Logo.apk
+
+          cp "$APK" \
+            output/UsahoDen-v156-Nota-Thermal-Rapi.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v155-Nota-Thermal-Logo
-          path: output/UsahoDen-v155-Nota-Thermal-Logo.apk
+          name: UsahoDen-v156-Nota-Thermal-Rapi
+          path: output/UsahoDen-v156-Nota-Thermal-Rapi.apk
           if-no-files-found: error
           retention-days: 14
 
