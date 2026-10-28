@@ -1,5 +1,4 @@
-
-name: Build UsahoDen v156 - Pengaturan Printer Manual
+name: Build UsahoDen v157 - Nota Digital Pembayaran Cicilan
 
 on:
   workflow_dispatch:
@@ -22,17 +21,17 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Locate and extract source ZIP v156
+      - name: Locate and extract source ZIP v157
         shell: bash
         run: |
           set -euo pipefail
 
           ZIP_FILE="$(find . -maxdepth 5 -type f \
-            -iname 'UsahoDen-v156-Pengaturan-Printer-Manual-Source.zip' \
+            -iname 'UsahoDen-v157-Nota-Digital-Pembayaran-Cicilan-Source.zip' \
             -print -quit)"
 
           if [ -z "$ZIP_FILE" ]; then
-            echo "Source ZIP v156 tidak ditemukan."
+            echo "Source ZIP v157 tidak ditemukan."
             find . -maxdepth 5 -type f -iname '*.zip' -print || true
             exit 1
           fi
@@ -40,44 +39,29 @@ jobs:
           mkdir -p "$RUNNER_TEMP/usaho-source"
           unzip -q "$ZIP_FILE" -d "$RUNNER_TEMP/usaho-source"
 
-          PROJECT_DIR="$RUNNER_TEMP/usaho-source"
+          PROJECT_DIR="$(find "$RUNNER_TEMP/usaho-source" \
+            -type f -path '*/app/build.gradle' \
+            -print -quit | sed 's#/app/build.gradle$##')"
 
-          if [ ! -f "$PROJECT_DIR/app/build.gradle" ] && \
-             [ ! -f "$PROJECT_DIR/app/build.gradle.kts" ]; then
-            PROJECT_DIR="$(find "$RUNNER_TEMP/usaho-source" -type f \
-              \( -path '*/app/build.gradle' -o \
-                 -path '*/app/build.gradle.kts' \) \
-              -print -quit | sed -E 's#/app/build.gradle(\.kts)?$##')"
-          fi
-
-          if [ -z "$PROJECT_DIR" ] || \
-             { [ ! -f "$PROJECT_DIR/app/build.gradle" ] && \
-               [ ! -f "$PROJECT_DIR/app/build.gradle.kts" ]; }; then
-            echo "Gradle modul app tidak ditemukan."
-            exit 1
-          fi
-
-          if [ ! -f "$PROJECT_DIR/settings.gradle" ] && \
-             [ ! -f "$PROJECT_DIR/settings.gradle.kts" ]; then
-            echo "settings.gradle tidak ditemukan."
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "app/build.gradle tidak ditemukan."
             exit 1
           fi
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-          echo "Proyek ditemukan: $PROJECT_DIR"
 
-      - name: Install Android SDK command-line tools manually
+      - name: Install Android SDK command-line tools
         shell: bash
         run: |
           set -euo pipefail
 
           SDK_ROOT="$RUNNER_TEMP/android-sdk"
+          mkdir -p "$RUNNER_TEMP/android-tools"
 
           curl --fail --location --retry 3 \
             "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip" \
             -o "$RUNNER_TEMP/android-tools.zip"
 
-          mkdir -p "$RUNNER_TEMP/android-tools"
           unzip -q "$RUNNER_TEMP/android-tools.zip" \
             -d "$RUNNER_TEMP/android-tools"
 
@@ -96,15 +80,11 @@ jobs:
           set -euo pipefail
 
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          mkdir -p "$ANDROID_HOME/licenses"
 
-          for i in $(seq 1 20); do
-            printf 'y\n'
-          done > "$RUNNER_TEMP/sdk-licenses.txt"
-
-          "$SDKMANAGER" \
-            --sdk_root="$ANDROID_HOME" \
-            --licenses < "$RUNNER_TEMP/sdk-licenses.txt"
+          set +o pipefail
+          yes | "$SDKMANAGER" \
+            --sdk_root="$ANDROID_HOME" --licenses || true
+          set -o pipefail
 
       - name: Install Android SDK packages - PATOKAN ABANG
         shell: bash
@@ -113,19 +93,25 @@ jobs:
 
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
 
-          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" \
-            'platform-tools' \
-            'platforms;android-35' \
-            'build-tools;35.0.0'
+          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "platform-tools"
+          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "platforms;android-35"
+          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "build-tools;35.0.0"
 
           test -d "$ANDROID_HOME/platform-tools"
           test -d "$ANDROID_HOME/platforms/android-35"
           test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner"
 
-      - name: Set up Gradle 8.7
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.7'
+      - name: Install Gradle 8.7
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          wget -q \
+            https://services.gradle.org/distributions/gradle-8.7-bin.zip \
+            -O "$RUNNER_TEMP/gradle.zip"
+
+          unzip -q "$RUNNER_TEMP/gradle.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/gradle-8.7/bin" >> "$GITHUB_PATH"
 
       - name: Decode existing signing keystore
         shell: bash
@@ -139,16 +125,15 @@ jobs:
 
           if [ -z "${KEYSTORE_BASE64:-}" ] || \
              [ -z "${KEYSTORE_PASSWORD:-}" ] || \
-             [ -z "${KEY_ALIAS:-}" ] || \
-             [ -z "${KEY_PASSWORD:-}" ]; then
-            echo "GitHub Secrets keystore lama belum lengkap."
+             [ -z "${KEY_ALIAS:-}" ]; then
+            echo "Secrets keystore lama belum lengkap."
+            echo "Build dihentikan agar tanda tangan aplikasi tidak berubah."
             exit 1
           fi
 
           KEYSTORE="$RUNNER_TEMP/usahoden-existing.jks"
 
-          printf '%s' "$KEYSTORE_BASE64" \
-            | base64 --decode > "$KEYSTORE"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
 
           keytool -list \
             -keystore "$KEYSTORE" \
@@ -159,61 +144,49 @@ jobs:
             echo "TOKOKU_KEYSTORE_FILE=$KEYSTORE"
             echo "TOKOKU_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
             echo "TOKOKU_KEY_ALIAS=$KEY_ALIAS"
-            echo "TOKOKU_KEY_PASSWORD=$KEY_PASSWORD"
+            echo "TOKOKU_KEY_PASSWORD=${KEY_PASSWORD:-$KEYSTORE_PASSWORD}"
           } >> "$GITHUB_ENV"
 
-      - name: Verify version and build signed Release APK
+      - name: Verify app identity and build release APK
         shell: bash
         run: |
           set -euo pipefail
 
           cd "$PROJECT_DIR"
 
-          echo "Memeriksa konfigurasi versi v156..."
+          grep -Fq "applicationId 'com.tokoku.app'" app/build.gradle
+          grep -Eq 'versionCode[[:space:]]+157' app/build.gradle
 
-          grep -Eq 'versionCode[[:space:]]+156' app/build.gradle
-          grep -Fq \
-            "3.22.16-v156-pengaturan-printer-manual" \
-            app/build.gradle
-
-          grep -Fq 'printerLogoMode' \
-            app/src/main/assets/index.html
-
-          grep -Fq 'final String compactText' \
-            app/src/main/java/com/tokoku/app/MainActivity.java
-
-          gradle --no-daemon assembleRelease --stacktrace \
-            -Pandroid.injected.signing.store.file="$TOKOKU_KEYSTORE_FILE" \
-            -Pandroid.injected.signing.store.password="$TOKOKU_KEYSTORE_PASSWORD" \
-            -Pandroid.injected.signing.key.alias="$TOKOKU_KEY_ALIAS" \
-            -Pandroid.injected.signing.key.password="$TOKOKU_KEY_PASSWORD"
+          gradle :app:assembleRelease --no-daemon --stacktrace
 
       - name: Verify APK and prepare artifact
         shell: bash
         run: |
           set -euo pipefail
 
-          APK="$(find "$PROJECT_DIR/app/build/outputs/apk/release" \
-            -type f -name '*.apk' -print -quit)"
+          APK="$PROJECT_DIR/app/build/outputs/apk/release/app-release.apk"
 
-          if [ -z "$APK" ]; then
-            echo "APK release tidak ditemukan."
-            exit 1
-          fi
+          test -s "$APK"
 
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" \
             verify --verbose "$APK"
 
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" \
+            dump badging "$APK" | tee "$RUNNER_TEMP/apk-info.txt"
+
+          grep -Fq "package: name='com.tokoku.app'" \
+            "$RUNNER_TEMP/apk-info.txt"
+
           mkdir -p output
 
           cp "$APK" \
-            output/UsahoDen-v156-Pengaturan-Printer-Manual.apk
+            output/UsahoDen-v157-Nota-Digital-Pembayaran-Cicilan.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v156-Pengaturan-Printer-Manual
-          path: output/UsahoDen-v156-Pengaturan-Printer-Manual.apk
+          name: UsahoDen-v157-Nota-Digital-Pembayaran-Cicilan
+          path: output/UsahoDen-v157-Nota-Digital-Pembayaran-Cicilan.apk
           if-no-files-found: error
           retention-days: 14
 
