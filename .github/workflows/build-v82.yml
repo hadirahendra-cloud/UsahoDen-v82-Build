@@ -1,4 +1,4 @@
-name: Build UsahoDen v158 - Nota Digital Pembayaran Cicilan
+name: Build UsahoDen v159 - Riwayat Transaksi Nama Rumah Makan
 
 on:
   workflow_dispatch:
@@ -21,18 +21,18 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Find and extract source ZIP
+      - name: Find and extract source ZIP v159
         shell: bash
         run: |
           set -euo pipefail
 
           ZIP_FILE="$(find . -maxdepth 6 -type f \
-            -iname 'UsahoDen-v158-Nota-Digital-Pembayaran-Cicilan-Source.zip' \
+            -iname 'UsahoDen-v159-Riwayat-Transaksi-Nama-Rumah-Makan-Source.zip' \
             -print -quit)"
 
           if [ -z "$ZIP_FILE" ]; then
-            echo "ERROR: Source ZIP v158 tidak ditemukan."
-            find . -maxdepth 6 -type f -iname '*.zip' -print
+            echo "ERROR: Source ZIP v159 tidak ditemukan."
+            find . -maxdepth 6 -type f -iname '*.zip' -print || true
             exit 1
           fi
 
@@ -45,13 +45,15 @@ jobs:
 
           if [ -z "$PROJECT_DIR" ]; then
             echo "ERROR: app/build.gradle tidak ditemukan."
+            find "$RUNNER_TEMP/usaho-source" \
+              -type f -name 'build.gradle*' -print
             exit 1
           fi
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-          echo "Source: $PROJECT_DIR"
+          echo "Source ditemukan: $PROJECT_DIR"
 
-      - name: Install Android SDK tools
+      - name: Install Android SDK command-line tools
         shell: bash
         run: |
           set -euo pipefail
@@ -61,7 +63,7 @@ jobs:
 
           mkdir -p "$TOOLS"
 
-          curl -fL --retry 3 \
+          curl --fail --location --retry 3 \
             "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip" \
             -o "$RUNNER_TEMP/android-tools.zip"
 
@@ -80,8 +82,10 @@ jobs:
         run: |
           set -euo pipefail
 
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+
           set +o pipefail
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+          yes | "$SDKMANAGER" \
             --sdk_root="$ANDROID_HOME" --licenses || true
           set -o pipefail
 
@@ -96,6 +100,7 @@ jobs:
           "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "platforms;android-35"
           "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "build-tools;35.0.0"
 
+          test -d "$ANDROID_HOME/platforms/android-35"
           test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner"
 
       - name: Install Gradle 8.7
@@ -103,14 +108,16 @@ jobs:
         run: |
           set -euo pipefail
 
-          curl -fL --retry 3 \
+          curl --fail --location --retry 3 \
             "https://services.gradle.org/distributions/gradle-8.7-bin.zip" \
-            -o "$RUNNER_TEMP/gradle.zip"
+            -o "$RUNNER_TEMP/gradle-8.7.zip"
 
-          unzip -q "$RUNNER_TEMP/gradle.zip" -d "$RUNNER_TEMP"
+          unzip -q "$RUNNER_TEMP/gradle-8.7.zip" \
+            -d "$RUNNER_TEMP"
+
           echo "$RUNNER_TEMP/gradle-8.7/bin" >> "$GITHUB_PATH"
 
-      - name: Verify existing signing keystore
+      - name: Decode and verify existing signing keystore
         shell: bash
         env:
           KEYSTORE_BASE64: ${{ secrets.TOKOKU_KEYSTORE_BASE64 }}
@@ -156,13 +163,13 @@ jobs:
             exit 1
           fi
 
-          if ! grep -Eq 'versionCode[[:space:]]+158' app/build.gradle; then
-            echo "ERROR: versionCode 158 tidak ditemukan."
+          if ! grep -Eq 'versionCode[[:space:]]+159' app/build.gradle; then
+            echo "ERROR: versionCode 159 tidak ditemukan."
             exit 1
           fi
 
-          echo "Identitas dan versionCode ditemukan."
-          echo "versionName tidak dipaksakan ke satu format tertentu."
+          echo "Pemeriksaan identitas dan versionCode selesai."
+          echo "versionName tidak dipaksakan ke format tertentu."
 
       - name: Build Release APK
         shell: bash
@@ -186,8 +193,6 @@ jobs:
           set -euo pipefail
 
           APK_DIR="$PROJECT_DIR/app/build/outputs/apk/release"
-          SIGNED_APK="$RUNNER_TEMP/UsahoDen-v158-signed.apk"
-
           APK=""
 
           for FILE in \
@@ -206,13 +211,14 @@ jobs:
             exit 1
           fi
 
+          SIGNED_APK="$RUNNER_TEMP/UsahoDen-v159-signed.apk"
+
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign \
             --ks "$TOKOKU_KEYSTORE_FILE" \
             --ks-key-alias "$TOKOKU_KEY_ALIAS" \
             --ks-pass env:TOKOKU_KEYSTORE_PASSWORD \
             --key-pass env:TOKOKU_KEY_PASSWORD \
-            --out "$SIGNED_APK" \
-            "$APK"
+            --out "$SIGNED_APK" "$APK"
 
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" \
             verify --verbose "$SIGNED_APK"
@@ -220,31 +226,31 @@ jobs:
           mkdir -p output
 
           cp "$SIGNED_APK" \
-            output/UsahoDen-v158-Nota-Digital-Pembayaran-Cicilan.apk
+            output/UsahoDen-v159-Riwayat-Transaksi-Nama-Rumah-Makan.apk
 
-      - name: Verify APK package
+      - name: Verify APK package and version
         shell: bash
         run: |
           set -euo pipefail
 
-          APK="output/UsahoDen-v158-Nota-Digital-Pembayaran-Cicilan.apk"
+          APK="output/UsahoDen-v159-Riwayat-Transaksi-Nama-Rumah-Makan.apk"
           AAPT="$ANDROID_HOME/build-tools/35.0.0/aapt"
 
           test -s "$APK"
 
           "$AAPT" dump badging "$APK" | tee "$RUNNER_TEMP/apk-info.txt"
 
-          grep -Fq "package: name='com.tokoku.app' versionCode='158'" \
+          grep -Fq "package: name='com.tokoku.app' versionCode='159'" \
             "$RUNNER_TEMP/apk-info.txt" || {
-            echo "ERROR: Package atau versionCode tidak sesuai."
+            echo "ERROR: Package atau versionCode APK tidak sesuai."
             exit 1
           }
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v158-Nota-Digital-Pembayaran-Cicilan
-          path: output/UsahoDen-v158-Nota-Digital-Pembayaran-Cicilan.apk
+          name: UsahoDen-v159-Riwayat-Transaksi-Nama-Rumah-Makan
+          path: output/UsahoDen-v159-Riwayat-Transaksi-Nama-Rumah-Makan.apk
           if-no-files-found: error
           retention-days: 14
 
@@ -253,4 +259,4 @@ jobs:
         shell: bash
         run: |
           rm -f "$RUNNER_TEMP/usahoden-existing.jks"
-          rm -f "$RUNNER_TEMP/UsahoDen-v158-signed.apk"
+          rm -f "$RUNNER_TEMP/UsahoDen-v159-signed.apk"
