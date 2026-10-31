@@ -1,4 +1,4 @@
-name: Build UsahoDen v161 - Kasir Font Pelanggan Fix
+name: Build UsahoDen v162 - Rincian Belanja Nama Rumah Makan FIX
 
 on:
   workflow_dispatch:
@@ -21,20 +21,23 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Find and extract source ZIP v161
+      - name: Find and extract source ZIP v162 REVISI
         shell: bash
         run: |
           set -euo pipefail
 
           ZIP_FILE="$(find . -maxdepth 6 -type f \
-            -iname 'UsahoDen-v161-Kasir-Font-Pelanggan-Fix-Source.zip' \
+            -iname 'UsahoDen-v162-Rincian-Belanja-Nama-Rumah-Makan-Source-REVISI.zip' \
             -print -quit)"
 
           if [ -z "$ZIP_FILE" ]; then
-            echo "ERROR: Source ZIP v161 tidak ditemukan."
+            echo "ERROR: Source ZIP v162 REVISI tidak ditemukan."
+            echo "Pastikan ZIP sudah diunggah ke repository."
             find . -maxdepth 6 -type f -iname '*.zip' -print || true
             exit 1
           fi
+
+          echo "Source ditemukan: $ZIP_FILE"
 
           mkdir -p "$RUNNER_TEMP/usaho-source"
           unzip -q "$ZIP_FILE" -d "$RUNNER_TEMP/usaho-source"
@@ -51,7 +54,7 @@ jobs:
           fi
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-          echo "Source ditemukan: $PROJECT_DIR"
+          echo "Project: $PROJECT_DIR"
 
       - name: Install Android SDK command-line tools
         shell: bash
@@ -102,6 +105,7 @@ jobs:
 
           test -d "$ANDROID_HOME/platforms/android-35"
           test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          test -x "$ANDROID_HOME/build-tools/35.0.0/aapt"
 
       - name: Install Gradle 8.7
         shell: bash
@@ -151,7 +155,9 @@ jobs:
             echo "TOKOKU_KEY_PASSWORD=$KEY_PASSWORD"
           } >> "$GITHUB_ENV"
 
-      - name: Check app identity and versionCode
+          echo "Keystore lama berhasil diverifikasi."
+
+      - name: Check application identity and version
         shell: bash
         run: |
           set -euo pipefail
@@ -159,16 +165,17 @@ jobs:
           cd "$PROJECT_DIR"
 
           if ! grep -Rq 'com\.tokoku\.app' app/build.gradle app/src; then
-            echo "ERROR: Identitas com.tokoku.app tidak ditemukan."
+            echo "ERROR: Package com.tokoku.app tidak ditemukan."
             exit 1
           fi
 
-          if ! grep -Eq 'versionCode[[:space:]]+161' app/build.gradle; then
-            echo "ERROR: versionCode 161 tidak ditemukan."
+          if ! grep -Eq 'versionCode[[:space:]]*=?[[:space:]]*162([^0-9]|$)' \
+            app/build.gradle; then
+            echo "ERROR: versionCode 162 tidak ditemukan."
             exit 1
           fi
 
-          echo "Identitas aplikasi dan versionCode 161 ditemukan."
+          echo "Package dan versionCode berhasil diperiksa."
 
       - name: Build Release APK
         shell: bash
@@ -186,7 +193,7 @@ jobs:
               --no-daemon --stacktrace
           fi
 
-      - name: Sign APK with existing keystore
+      - name: Locate and sign APK
         shell: bash
         run: |
           set -euo pipefail
@@ -210,7 +217,7 @@ jobs:
             exit 1
           fi
 
-          SIGNED_APK="$RUNNER_TEMP/UsahoDen-v161-signed.apk"
+          SIGNED_APK="$RUNNER_TEMP/UsahoDen-v162-signed.apk"
 
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign \
             --ks "$TOKOKU_KEYSTORE_FILE" \
@@ -225,31 +232,31 @@ jobs:
           mkdir -p output
 
           cp "$SIGNED_APK" \
-            output/UsahoDen-v161-Kasir-Font-Pelanggan-Fix.apk
+            output/UsahoDen-v162-Rincian-Belanja-Nama-Rumah-Makan.apk
 
       - name: Verify APK package and version
         shell: bash
         run: |
           set -euo pipefail
 
-          APK="output/UsahoDen-v161-Kasir-Font-Pelanggan-Fix.apk"
-          AAPT="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          APK="output/UsahoDen-v162-Rincian-Belanja-Nama-Rumah-Makan.apk"
 
-          test -s "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" \
+            dump badging "$APK" | tee "$RUNNER_TEMP/apk-info.txt"
 
-          "$AAPT" dump badging "$APK" | tee "$RUNNER_TEMP/apk-info.txt"
-
-          grep -Fq "package: name='com.tokoku.app' versionCode='161'" \
+          grep -Fq "package: name='com.tokoku.app' versionCode='162'" \
             "$RUNNER_TEMP/apk-info.txt" || {
-            echo "ERROR: Package atau versionCode tidak sesuai."
+            echo "ERROR: Package atau versionCode APK tidak sesuai."
             exit 1
           }
+
+          echo "APK berhasil diverifikasi."
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v161-Kasir-Font-Pelanggan-Fix
-          path: output/UsahoDen-v161-Kasir-Font-Pelanggan-Fix.apk
+          name: UsahoDen-v162-Rincian-Belanja-Nama-Rumah-Makan
+          path: output/UsahoDen-v162-Rincian-Belanja-Nama-Rumah-Makan.apk
           if-no-files-found: error
           retention-days: 14
 
@@ -258,4 +265,4 @@ jobs:
         shell: bash
         run: |
           rm -f "$RUNNER_TEMP/usahoden-existing.jks"
-          rm -f "$RUNNER_TEMP/UsahoDen-v161-signed.apk"
+          rm -f "$RUNNER_TEMP/UsahoDen-v162-signed.apk"
