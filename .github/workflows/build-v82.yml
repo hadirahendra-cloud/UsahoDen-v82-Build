@@ -1,4 +1,4 @@
-name: Build UsahoDen v162 - Rincian Belanja Nama Rumah Makan FIX
+name: Build UsahoDen v163 - Notifikasi Global Fix
 
 on:
   workflow_dispatch:
@@ -21,18 +21,17 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Find and extract source ZIP v162 REVISI
+      - name: Find and extract source ZIP v163
         shell: bash
         run: |
           set -euo pipefail
 
           ZIP_FILE="$(find . -maxdepth 6 -type f \
-            -iname 'UsahoDen-v162-Rincian-Belanja-Nama-Rumah-Makan-Source-REVISI.zip' \
+            -iname 'UsahoDen-v163-Notifikasi-Global-Fix-Source.zip' \
             -print -quit)"
 
           if [ -z "$ZIP_FILE" ]; then
-            echo "ERROR: Source ZIP v162 REVISI tidak ditemukan."
-            echo "Pastikan ZIP sudah diunggah ke repository."
+            echo "ERROR: Source ZIP v163 tidak ditemukan."
             find . -maxdepth 6 -type f -iname '*.zip' -print || true
             exit 1
           fi
@@ -157,7 +156,7 @@ jobs:
 
           echo "Keystore lama berhasil diverifikasi."
 
-      - name: Check application identity and version
+      - name: Check application identity and versionCode
         shell: bash
         run: |
           set -euo pipefail
@@ -169,13 +168,14 @@ jobs:
             exit 1
           fi
 
-          if ! grep -Eq 'versionCode[[:space:]]*=?[[:space:]]*162([^0-9]|$)' \
+          if ! grep -Eq 'versionCode[[:space:]]*=?[[:space:]]*163([^0-9]|$)' \
             app/build.gradle; then
-            echo "ERROR: versionCode 162 tidak ditemukan."
+            echo "ERROR: versionCode 163 tidak ditemukan."
             exit 1
           fi
 
-          echo "Package dan versionCode berhasil diperiksa."
+          echo "Package dan versionCode 163 berhasil diperiksa."
+          echo "versionName tidak dipaksakan ke format tertentu."
 
       - name: Build Release APK
         shell: bash
@@ -217,7 +217,7 @@ jobs:
             exit 1
           fi
 
-          SIGNED_APK="$RUNNER_TEMP/UsahoDen-v162-signed.apk"
+          SIGNED_APK="$RUNNER_TEMP/UsahoDen-v163-signed.apk"
 
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign \
             --ks "$TOKOKU_KEYSTORE_FILE" \
@@ -232,19 +232,19 @@ jobs:
           mkdir -p output
 
           cp "$SIGNED_APK" \
-            output/UsahoDen-v162-Rincian-Belanja-Nama-Rumah-Makan.apk
+            output/UsahoDen-v163-Notifikasi-Global-Fix.apk
 
       - name: Verify APK package and version
         shell: bash
         run: |
           set -euo pipefail
 
-          APK="output/UsahoDen-v162-Rincian-Belanja-Nama-Rumah-Makan.apk"
+          APK="output/UsahoDen-v163-Notifikasi-Global-Fix.apk"
 
           "$ANDROID_HOME/build-tools/35.0.0/aapt" \
             dump badging "$APK" | tee "$RUNNER_TEMP/apk-info.txt"
 
-          grep -Fq "package: name='com.tokoku.app' versionCode='162'" \
+          grep -Fq "package: name='com.tokoku.app' versionCode='163'" \
             "$RUNNER_TEMP/apk-info.txt" || {
             echo "ERROR: Package atau versionCode APK tidak sesuai."
             exit 1
@@ -255,8 +255,8 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v162-Rincian-Belanja-Nama-Rumah-Makan
-          path: output/UsahoDen-v162-Rincian-Belanja-Nama-Rumah-Makan.apk
+          name: UsahoDen-v163-Notifikasi-Global-Fix
+          path: output/UsahoDen-v163-Notifikasi-Global-Fix.apk
           if-no-files-found: error
           retention-days: 14
 
@@ -265,4 +265,4 @@ jobs:
         shell: bash
         run: |
           rm -f "$RUNNER_TEMP/usahoden-existing.jks"
-          rm -f "$RUNNER_TEMP/UsahoDen-v162-signed.apk"
+          rm -f "$RUNNER_TEMP/UsahoDen-v163-signed.apk"
