@@ -1,5 +1,4 @@
-
-name: Build UsahoDen v167 - Versi Tentang Aplikasi Otomatis
+name: Build UsahoDen v168 - Firebase Backup Cloud
 
 on:
   workflow_dispatch:
@@ -22,55 +21,36 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Locate and extract source ZIP v167
+      - name: Locate and extract source ZIP v168
         shell: bash
         run: |
           set -euo pipefail
-
-          ZIP_FILE="$(find . -maxdepth 5 -type f -iname 'UsahoDen-v167-Versi-Tentang-Aplikasi-Otomatis-Source.zip' -print -quit)"
-
+          ZIP_FILE="$(find . -maxdepth 5 -type f -iname 'UsahoDen-v168-Firebase-Backup-Cloud-Source.zip' -print -quit)"
           if [ -z "$ZIP_FILE" ]; then
-            echo "Source ZIP v167 tidak ditemukan."
-            echo "Pastikan ZIP sudah diunggah ke repositori GitHub."
+            echo "Source ZIP v168 tidak ditemukan."
             find . -maxdepth 5 -type f -iname '*.zip' -print || true
             exit 1
           fi
-
           mkdir -p "$RUNNER_TEMP/usaho-source"
           unzip -q "$ZIP_FILE" -d "$RUNNER_TEMP/usaho-source"
-
           PROJECT_DIR="$(find "$RUNNER_TEMP/usaho-source" -type f -path '*/app/build.gradle' -print -quit | sed 's#/app/build.gradle$##')"
-
-          if [ -z "$PROJECT_DIR" ]; then
-            echo "app/build.gradle tidak ditemukan."
-            exit 1
-          fi
-
+          test -n "$PROJECT_DIR" || { echo 'app/build.gradle tidak ditemukan'; exit 1; }
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
       - name: Install Android SDK command-line tools
         shell: bash
         run: |
           set -euo pipefail
-
           SDK_ROOT="$RUNNER_TEMP/android-sdk"
           mkdir -p "$RUNNER_TEMP/android-tools"
-
           curl --fail --location --retry 3 \
             "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip" \
             -o "$RUNNER_TEMP/android-tools.zip"
-
-          unzip -q "$RUNNER_TEMP/android-tools.zip" \
-            -d "$RUNNER_TEMP/android-tools"
-
+          unzip -q "$RUNNER_TEMP/android-tools.zip" -d "$RUNNER_TEMP/android-tools"
           mkdir -p "$SDK_ROOT/cmdline-tools/latest"
-
-          cp -a "$RUNNER_TEMP/android-tools/cmdline-tools/." \
-            "$SDK_ROOT/cmdline-tools/latest/"
-
+          cp -a "$RUNNER_TEMP/android-tools/cmdline-tools/." "$SDK_ROOT/cmdline-tools/latest/"
           echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
           echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
-
           echo "$SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
           echo "$SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
 
@@ -78,9 +58,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-
           set +o pipefail
           yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses || true
           set -o pipefail
@@ -89,13 +67,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-
           "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "platform-tools"
           "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "platforms;android-35"
           "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "build-tools;35.0.0"
-
           test -d "$ANDROID_HOME/platform-tools"
           test -d "$ANDROID_HOME/platforms/android-35"
           test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner"
@@ -104,13 +79,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
-          wget -q \
-            https://services.gradle.org/distributions/gradle-8.7-bin.zip \
-            -O "$RUNNER_TEMP/gradle.zip"
-
+          wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip -O "$RUNNER_TEMP/gradle.zip"
           unzip -q "$RUNNER_TEMP/gradle.zip" -d "$RUNNER_TEMP"
-
           echo "$RUNNER_TEMP/gradle-8.7/bin" >> "$GITHUB_PATH"
 
       - name: Decode existing signing keystore
@@ -122,24 +92,15 @@ jobs:
           KEY_PASSWORD: ${{ secrets.TOKOKU_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-
-          if [ -z "${KEYSTORE_BASE64:-}" ] || \
-             [ -z "${KEYSTORE_PASSWORD:-}" ] || \
-             [ -z "${KEY_ALIAS:-}" ]; then
+          if [ -z "${KEYSTORE_BASE64:-}" ] || [ -z "${KEYSTORE_PASSWORD:-}" ] || [ -z "${KEY_ALIAS:-}" ]; then
             echo "Secrets keystore lama belum lengkap."
-            echo "Build dihentikan agar kompatibilitas update tidak berubah."
             exit 1
           fi
-
           KEYSTORE="$RUNNER_TEMP/usahoden-existing.jks"
-
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
-
-          keytool -list \
-            -keystore "$KEYSTORE" \
+          keytool -list -keystore "$KEYSTORE" \
             -storepass "$KEYSTORE_PASSWORD" \
             -alias "$KEY_ALIAS" >/dev/null
-
           {
             echo "TOKOKU_KEYSTORE_FILE=$KEYSTORE"
             echo "TOKOKU_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
@@ -151,50 +112,33 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           cd "$PROJECT_DIR"
-
           grep -Fq "applicationId 'com.tokoku.app'" app/build.gradle
-          grep -Eq 'versionCode[[:space:]]+167' app/build.gradle
-          grep -Fq "versionName '3.22.27-v167-versi-tentang-otomatis'" app/build.gradle
-
-          chmod +x gradlew 2>/dev/null || true
-
+          grep -Eq 'versionCode[[:space:]]+168' app/build.gradle
           gradle :app:assembleRelease --no-daemon --stacktrace
 
       - name: Verify APK and prepare artifact
         shell: bash
         run: |
           set -euo pipefail
-
           APK="$PROJECT_DIR/app/build/outputs/apk/release/app-release.apk"
-
           test -s "$APK"
-
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" \
-            verify --verbose "$APK"
-
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" \
-            dump badging "$APK" | tee "$RUNNER_TEMP/apk-info.txt"
-
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee "$RUNNER_TEMP/apk-info.txt"
           grep -Fq "package: name='com.tokoku.app'" "$RUNNER_TEMP/apk-info.txt"
-          grep -Fq "versionCode='167'" "$RUNNER_TEMP/apk-info.txt"
-
+          grep -Fq "versionCode='168'" "$RUNNER_TEMP/apk-info.txt"
           mkdir -p output
-
-          cp "$APK" \
-            output/UsahoDen-v167-Versi-Tentang-Aplikasi-Otomatis.apk
+          cp "$APK" output/UsahoDen-v168-Firebase-Backup-Cloud.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v167-Versi-Tentang-Aplikasi-Otomatis
-          path: output/UsahoDen-v167-Versi-Tentang-Aplikasi-Otomatis.apk
+          name: UsahoDen-v168-Firebase-Backup-Cloud
+          path: output/UsahoDen-v168-Firebase-Backup-Cloud.apk
           if-no-files-found: error
           retention-days: 14
 
       - name: Cleanup temporary keystore
         if: always()
         shell: bash
-        run: |
-          rm -f "$RUNNER_TEMP/usahoden-existing.jks"
+        run: rm -f "$RUNNER_TEMP/usahoden-existing.jks"
