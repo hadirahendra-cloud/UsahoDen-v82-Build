@@ -1,4 +1,5 @@
-name: Build UsahoDen v168 - Firebase Backup Cloud
+
+name: Build UsahoDen v169 - Firebase Realtime Database Backup
 
 on:
   workflow_dispatch:
@@ -8,7 +9,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 45
 
     steps:
@@ -21,13 +22,13 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Locate and extract source ZIP v168
+      - name: Locate and extract source ZIP v169
         shell: bash
         run: |
           set -euo pipefail
-          ZIP_FILE="$(find . -maxdepth 5 -type f -iname 'UsahoDen-v168-Firebase-Backup-Cloud-Source.zip' -print -quit)"
+          ZIP_FILE="$(find . -maxdepth 5 -type f -iname 'UsahoDen-v169-Firebase-Realtime-Backup-Source.zip' -print -quit)"
           if [ -z "$ZIP_FILE" ]; then
-            echo "Source ZIP v168 tidak ditemukan."
+            echo "Source ZIP v169 tidak ditemukan."
             find . -maxdepth 5 -type f -iname '*.zip' -print || true
             exit 1
           fi
@@ -37,7 +38,7 @@ jobs:
           test -n "$PROJECT_DIR" || { echo 'app/build.gradle tidak ditemukan'; exit 1; }
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
-      - name: Install Android SDK command-line tools
+      - name: Install Android SDK command-line tools manually
         shell: bash
         run: |
           set -euo pipefail
@@ -79,7 +80,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip -O "$RUNNER_TEMP/gradle.zip"
+          wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip \
+            -O "$RUNNER_TEMP/gradle.zip"
           unzip -q "$RUNNER_TEMP/gradle.zip" -d "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/gradle-8.7/bin" >> "$GITHUB_PATH"
 
@@ -92,15 +94,21 @@ jobs:
           KEY_PASSWORD: ${{ secrets.TOKOKU_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          if [ -z "${KEYSTORE_BASE64:-}" ] || [ -z "${KEYSTORE_PASSWORD:-}" ] || [ -z "${KEY_ALIAS:-}" ]; then
+          if [ -z "${KEYSTORE_BASE64:-}" ] || \
+             [ -z "${KEYSTORE_PASSWORD:-}" ] || \
+             [ -z "${KEY_ALIAS:-}" ]; then
             echo "Secrets keystore lama belum lengkap."
             exit 1
           fi
+
           KEYSTORE="$RUNNER_TEMP/usahoden-existing.jks"
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
-          keytool -list -keystore "$KEYSTORE" \
+
+          keytool -list \
+            -keystore "$KEYSTORE" \
             -storepass "$KEYSTORE_PASSWORD" \
             -alias "$KEY_ALIAS" >/dev/null
+
           {
             echo "TOKOKU_KEYSTORE_FILE=$KEYSTORE"
             echo "TOKOKU_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
@@ -113,28 +121,36 @@ jobs:
         run: |
           set -euo pipefail
           cd "$PROJECT_DIR"
+
           grep -Fq "applicationId 'com.tokoku.app'" app/build.gradle
-          grep -Eq 'versionCode[[:space:]]+168' app/build.gradle
+          grep -Eq 'versionCode[[:space:]]+169' app/build.gradle
+
           gradle :app:assembleRelease --no-daemon --stacktrace
 
       - name: Verify APK and prepare artifact
         shell: bash
         run: |
           set -euo pipefail
+
           APK="$PROJECT_DIR/app/build/outputs/apk/release/app-release.apk"
           test -s "$APK"
+
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee "$RUNNER_TEMP/apk-info.txt"
+
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" \
+            | tee "$RUNNER_TEMP/apk-info.txt"
+
           grep -Fq "package: name='com.tokoku.app'" "$RUNNER_TEMP/apk-info.txt"
-          grep -Fq "versionCode='168'" "$RUNNER_TEMP/apk-info.txt"
+          grep -Fq "versionCode='169'" "$RUNNER_TEMP/apk-info.txt"
+
           mkdir -p output
-          cp "$APK" output/UsahoDen-v168-Firebase-Backup-Cloud.apk
+          cp "$APK" output/UsahoDen-v169-Firebase-Realtime-Backup.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v168-Firebase-Backup-Cloud
-          path: output/UsahoDen-v168-Firebase-Backup-Cloud.apk
+          name: UsahoDen-v169-Firebase-Realtime-Backup
+          path: output/UsahoDen-v169-Firebase-Realtime-Backup.apk
           if-no-files-found: error
           retention-days: 14
 
