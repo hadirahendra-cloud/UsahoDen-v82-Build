@@ -1,5 +1,5 @@
 
-name: Build UsahoDen v166 - Nominal Cicilan Kosong
+name: Build UsahoDen v167 - Versi Tentang Aplikasi Otomatis
 
 on:
   workflow_dispatch:
@@ -22,15 +22,16 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Locate and extract source ZIP v166
+      - name: Locate and extract source ZIP v167
         shell: bash
         run: |
           set -euo pipefail
 
-          ZIP_FILE="$(find . -maxdepth 5 -type f -iname 'UsahoDen-v166-Nominal-Cicilan-Kosong-Source.zip' -print -quit)"
+          ZIP_FILE="$(find . -maxdepth 5 -type f -iname 'UsahoDen-v167-Versi-Tentang-Aplikasi-Otomatis-Source.zip' -print -quit)"
 
           if [ -z "$ZIP_FILE" ]; then
-            echo "Source ZIP v166 tidak ditemukan."
+            echo "Source ZIP v167 tidak ditemukan."
+            echo "Pastikan ZIP sudah diunggah ke repositori GitHub."
             find . -maxdepth 5 -type f -iname '*.zip' -print || true
             exit 1
           fi
@@ -47,7 +48,7 @@ jobs:
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
-      - name: Install Android SDK command-line tools manually
+      - name: Install Android SDK command-line tools
         shell: bash
         run: |
           set -euo pipefail
@@ -104,7 +105,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip \
+          wget -q \
+            https://services.gradle.org/distributions/gradle-8.7-bin.zip \
             -O "$RUNNER_TEMP/gradle.zip"
 
           unzip -q "$RUNNER_TEMP/gradle.zip" -d "$RUNNER_TEMP"
@@ -125,7 +127,7 @@ jobs:
              [ -z "${KEYSTORE_PASSWORD:-}" ] || \
              [ -z "${KEY_ALIAS:-}" ]; then
             echo "Secrets keystore lama belum lengkap."
-            echo "Build dihentikan agar kompatibilitas update tetap terjaga."
+            echo "Build dihentikan agar kompatibilitas update tidak berubah."
             exit 1
           fi
 
@@ -153,7 +155,10 @@ jobs:
           cd "$PROJECT_DIR"
 
           grep -Fq "applicationId 'com.tokoku.app'" app/build.gradle
-          grep -Eq 'versionCode[[:space:]]+166' app/build.gradle
+          grep -Eq 'versionCode[[:space:]]+167' app/build.gradle
+          grep -Fq "versionName '3.22.27-v167-versi-tentang-otomatis'" app/build.gradle
+
+          chmod +x gradlew 2>/dev/null || true
 
           gradle :app:assembleRelease --no-daemon --stacktrace
 
@@ -173,18 +178,18 @@ jobs:
             dump badging "$APK" | tee "$RUNNER_TEMP/apk-info.txt"
 
           grep -Fq "package: name='com.tokoku.app'" "$RUNNER_TEMP/apk-info.txt"
-          grep -Fq "versionCode='166'" "$RUNNER_TEMP/apk-info.txt"
+          grep -Fq "versionCode='167'" "$RUNNER_TEMP/apk-info.txt"
 
           mkdir -p output
 
           cp "$APK" \
-            output/UsahoDen-v166-Nominal-Cicilan-Kosong.apk
+            output/UsahoDen-v167-Versi-Tentang-Aplikasi-Otomatis.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v166-Nominal-Cicilan-Kosong
-          path: output/UsahoDen-v166-Nominal-Cicilan-Kosong.apk
+          name: UsahoDen-v167-Versi-Tentang-Aplikasi-Otomatis
+          path: output/UsahoDen-v167-Versi-Tentang-Aplikasi-Otomatis.apk
           if-no-files-found: error
           retention-days: 14
 
