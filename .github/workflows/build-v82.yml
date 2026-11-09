@@ -1,5 +1,5 @@
 
-name: Build UsahoDen v165 - Smart Print Bluetooth Fix
+name: Build UsahoDen v166 - Nominal Cicilan Kosong
 
 on:
   workflow_dispatch:
@@ -22,15 +22,15 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Locate and extract source ZIP v165
+      - name: Locate and extract source ZIP v166
         shell: bash
         run: |
           set -euo pipefail
 
-          ZIP_FILE="$(find . -maxdepth 5 -type f -iname 'UsahoDen-v165-Smart-Print-Bluetooth-Fix-Source.zip' -print -quit)"
+          ZIP_FILE="$(find . -maxdepth 5 -type f -iname 'UsahoDen-v166-Nominal-Cicilan-Kosong-Source.zip' -print -quit)"
 
           if [ -z "$ZIP_FILE" ]; then
-            echo "Source ZIP v165 tidak ditemukan."
+            echo "Source ZIP v166 tidak ditemukan."
             find . -maxdepth 5 -type f -iname '*.zip' -print || true
             exit 1
           fi
@@ -41,13 +41,13 @@ jobs:
           PROJECT_DIR="$(find "$RUNNER_TEMP/usaho-source" -type f -path '*/app/build.gradle' -print -quit | sed 's#/app/build.gradle$##')"
 
           if [ -z "$PROJECT_DIR" ]; then
-            echo "File app/build.gradle tidak ditemukan."
+            echo "app/build.gradle tidak ditemukan."
             exit 1
           fi
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
-      - name: Install Android SDK command-line tools
+      - name: Install Android SDK command-line tools manually
         shell: bash
         run: |
           set -euo pipefail
@@ -125,7 +125,7 @@ jobs:
              [ -z "${KEYSTORE_PASSWORD:-}" ] || \
              [ -z "${KEY_ALIAS:-}" ]; then
             echo "Secrets keystore lama belum lengkap."
-            echo "Build dihentikan agar kompatibilitas update tidak berubah."
+            echo "Build dihentikan agar kompatibilitas update tetap terjaga."
             exit 1
           fi
 
@@ -145,7 +145,7 @@ jobs:
             echo "TOKOKU_KEY_PASSWORD=${KEY_PASSWORD:-$KEYSTORE_PASSWORD}"
           } >> "$GITHUB_ENV"
 
-      - name: Verify identity and build signed APK
+      - name: Verify app identity and build signed APK
         shell: bash
         run: |
           set -euo pipefail
@@ -153,7 +153,7 @@ jobs:
           cd "$PROJECT_DIR"
 
           grep -Fq "applicationId 'com.tokoku.app'" app/build.gradle
-          grep -Eq 'versionCode[[:space:]]+165' app/build.gradle
+          grep -Eq 'versionCode[[:space:]]+166' app/build.gradle
 
           gradle :app:assembleRelease --no-daemon --stacktrace
 
@@ -173,18 +173,18 @@ jobs:
             dump badging "$APK" | tee "$RUNNER_TEMP/apk-info.txt"
 
           grep -Fq "package: name='com.tokoku.app'" "$RUNNER_TEMP/apk-info.txt"
-          grep -Fq "versionCode='165'" "$RUNNER_TEMP/apk-info.txt"
+          grep -Fq "versionCode='166'" "$RUNNER_TEMP/apk-info.txt"
 
           mkdir -p output
 
           cp "$APK" \
-            output/UsahoDen-v165-Smart-Print-Bluetooth-Fix.apk
+            output/UsahoDen-v166-Nominal-Cicilan-Kosong.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v165-Smart-Print-Bluetooth-Fix
-          path: output/UsahoDen-v165-Smart-Print-Bluetooth-Fix.apk
+          name: UsahoDen-v166-Nominal-Cicilan-Kosong
+          path: output/UsahoDen-v166-Nominal-Cicilan-Kosong.apk
           if-no-files-found: error
           retention-days: 14
 
