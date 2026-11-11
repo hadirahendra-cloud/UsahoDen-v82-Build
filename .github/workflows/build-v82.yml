@@ -1,5 +1,5 @@
 
-name: Build UsahoDen v170 - Kasir Otomatis Firebase
+name: Build UsahoDen v171 - Perbaikan Sinkronisasi Kasir
 
 on:
   workflow_dispatch:
@@ -11,7 +11,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 45
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -22,13 +21,13 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Locate and extract source ZIP v170
+      - name: Locate and extract source ZIP v171
         shell: bash
         run: |
           set -euo pipefail
-          ZIP_FILE="$(find . -maxdepth 6 -type f -iname 'UsahoDen-v170-Kasir-Otomatis-Source.zip' -print -quit)"
+          ZIP_FILE="$(find . -maxdepth 6 -type f -iname 'UsahoDen-v171-Perbaikan-Sinkronisasi-Source.zip' -print -quit)"
           if [ -z "$ZIP_FILE" ]; then
-            echo "Source ZIP v170 tidak ditemukan. Upload ZIP ini ke repositori GitHub terlebih dahulu."
+            echo "Source ZIP v171 tidak ditemukan. Upload ZIP ini ke repositori GitHub terlebih dahulu."
             find . -maxdepth 6 -type f -iname '*.zip' -print || true
             exit 1
           fi
@@ -111,7 +110,7 @@ jobs:
           set -euo pipefail
           cd "$PROJECT_DIR"
           grep -Fq "applicationId 'com.tokoku.app'" app/build.gradle
-          grep -Eq 'versionCode[[:space:]]+170' app/build.gradle
+          grep -Eq 'versionCode[[:space:]]+171' app/build.gradle
           gradle :app:assembleRelease --no-daemon --stacktrace
 
       - name: Verify APK and prepare artifact
@@ -123,15 +122,15 @@ jobs:
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee "$RUNNER_TEMP/apk-info.txt"
           grep -Fq "package: name='com.tokoku.app'" "$RUNNER_TEMP/apk-info.txt"
-          grep -Fq "versionCode='170'" "$RUNNER_TEMP/apk-info.txt"
+          grep -Fq "versionCode='171'" "$RUNNER_TEMP/apk-info.txt"
           mkdir -p output
-          cp "$APK" output/UsahoDen-v170-Kasir-Otomatis.apk
+          cp "$APK" output/UsahoDen-v171-Perbaikan-Sinkronisasi.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v170-Kasir-Otomatis
-          path: output/UsahoDen-v170-Kasir-Otomatis.apk
+          name: UsahoDen-v171-Perbaikan-Sinkronisasi
+          path: output/UsahoDen-v171-Perbaikan-Sinkronisasi.apk
           if-no-files-found: error
           retention-days: 14
 
