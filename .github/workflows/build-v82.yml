@@ -1,5 +1,4 @@
-
-name: Build UsahoDen v172 - Perbaikan Navigasi Kasir
+name: Build UsahoDen v173 - Login Firebase Kasir
 
 on:
   workflow_dispatch:
@@ -21,13 +20,13 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Locate and extract source ZIP v172
+      - name: Locate and extract source ZIP v173
         shell: bash
         run: |
           set -euo pipefail
-          ZIP_FILE="$(find . -maxdepth 6 -type f -iname 'UsahoDen-v172-Perbaikan-Navigasi-Kasir-Source.zip' -print -quit)"
+          ZIP_FILE="$(find . -maxdepth 6 -type f -iname 'UsahoDen-v173-Login-Firebase-Kasir-Source.zip' -print -quit)"
           if [ -z "$ZIP_FILE" ]; then
-            echo "Source ZIP v172 tidak ditemukan. Upload ZIP ini ke repositori GitHub terlebih dahulu."
+            echo "Source ZIP v173 tidak ditemukan. Upload ZIP ini ke repositori GitHub terlebih dahulu."
             find . -maxdepth 6 -type f -iname '*.zip' -print || true
             exit 1
           fi
@@ -110,7 +109,7 @@ jobs:
           set -euo pipefail
           cd "$PROJECT_DIR"
           grep -Fq "applicationId 'com.tokoku.app'" app/build.gradle
-          grep -Eq 'versionCode[[:space:]]+172' app/build.gradle
+          grep -Eq 'versionCode[[:space:]]+173' app/build.gradle
           gradle :app:assembleRelease --no-daemon --stacktrace
 
       - name: Verify APK and prepare artifact
@@ -122,15 +121,15 @@ jobs:
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee "$RUNNER_TEMP/apk-info.txt"
           grep -Fq "package: name='com.tokoku.app'" "$RUNNER_TEMP/apk-info.txt"
-          grep -Fq "versionCode='172'" "$RUNNER_TEMP/apk-info.txt"
+          grep -Fq "versionCode='173'" "$RUNNER_TEMP/apk-info.txt"
           mkdir -p output
-          cp "$APK" output/UsahoDen-v172-Perbaikan-Navigasi-Kasir.apk
+          cp "$APK" output/UsahoDen-v173-Login-Firebase-Kasir.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v172-Perbaikan-Navigasi-Kasir
-          path: output/UsahoDen-v172-Perbaikan-Navigasi-Kasir.apk
+          name: UsahoDen-v173-Login-Firebase-Kasir
+          path: output/UsahoDen-v173-Login-Firebase-Kasir.apk
           if-no-files-found: error
           retention-days: 14
 
