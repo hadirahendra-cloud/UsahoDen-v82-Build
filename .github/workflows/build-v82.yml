@@ -1,5 +1,5 @@
 
-name: Build UsahoDen v175 - Password Kasir Perangkat
+name: Build UsahoDen v176 - Header Kasir Fix
 
 on:
   workflow_dispatch:
@@ -22,15 +22,15 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Locate and extract source ZIP v175
+      - name: Locate and extract source ZIP v176
         shell: bash
         run: |
           set -euo pipefail
 
-          ZIP_FILE="$(find . -maxdepth 6 -type f -iname 'UsahoDen-v175-Password-Kasir-Perangkat-Source.zip' -print -quit)"
+          ZIP_FILE="$(find . -maxdepth 6 -type f -iname 'UsahoDen-v176-Header-Kasir-Fix-Source.zip' -print -quit)"
 
           if [ -z "$ZIP_FILE" ]; then
-            echo "Source ZIP v175 tidak ditemukan. Upload ZIP ini ke repositori GitHub terlebih dahulu."
+            echo "Source ZIP v176 tidak ditemukan."
             find . -maxdepth 6 -type f -iname '*.zip' -print || true
             exit 1
           fi
@@ -41,7 +41,7 @@ jobs:
           PROJECT_DIR="$(find "$RUNNER_TEMP/usaho-source" -type f -path '*/app/build.gradle' -print -quit | sed 's#/app/build.gradle$##')"
 
           test -n "$PROJECT_DIR" || {
-            echo 'app/build.gradle tidak ditemukan'
+            echo "app/build.gradle tidak ditemukan"
             exit 1
           }
 
@@ -62,7 +62,7 @@ jobs:
           SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager -print -quit 2>/dev/null || true)"
 
           if [ -z "$SDKMANAGER" ]; then
-            echo "sdkmanager tidak ditemukan di Android SDK bawaan runner."
+            echo "sdkmanager tidak ditemukan."
             exit 1
           fi
 
@@ -148,8 +148,8 @@ jobs:
           cd "$PROJECT_DIR"
 
           grep -Fq "applicationId 'com.tokoku.app'" app/build.gradle
-          grep -Eq 'versionCode[[:space:]]+175' app/build.gradle
-          grep -Fq "versionName '3.22.35-v175-password-kasir-perangkat'" app/build.gradle
+          grep -Eq 'versionCode[[:space:]]+176' app/build.gradle
+          grep -Fq "versionName '3.22.36-v176-header-kasir-fix'" app/build.gradle
 
           gradle :app:assembleRelease --no-daemon --stacktrace
 
@@ -168,17 +168,17 @@ jobs:
             | tee "$RUNNER_TEMP/apk-info.txt"
 
           grep -Fq "package: name='com.tokoku.app'" "$RUNNER_TEMP/apk-info.txt"
-          grep -Fq "versionCode='175'" "$RUNNER_TEMP/apk-info.txt"
+          grep -Fq "versionCode='176'" "$RUNNER_TEMP/apk-info.txt"
 
           mkdir -p output
 
-          cp "$APK" output/UsahoDen-v175-Password-Kasir-Perangkat.apk
+          cp "$APK" output/UsahoDen-v176-Header-Kasir-Fix.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v175-Password-Kasir-Perangkat
-          path: output/UsahoDen-v175-Password-Kasir-Perangkat.apk
+          name: UsahoDen-v176-Header-Kasir-Fix
+          path: output/UsahoDen-v176-Header-Kasir-Fix.apk
           if-no-files-found: error
           retention-days: 14
 
