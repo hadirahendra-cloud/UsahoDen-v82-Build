@@ -1,5 +1,5 @@
 
-name: Build UsahoDen v176 - Header Kasir Fix
+name: Build UsahoDen v177 - Header Kasir Responsif
 
 on:
   workflow_dispatch:
@@ -22,15 +22,15 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Locate and extract source ZIP v176
+      - name: Locate and extract source ZIP v177
         shell: bash
         run: |
           set -euo pipefail
 
-          ZIP_FILE="$(find . -maxdepth 6 -type f -iname 'UsahoDen-v176-Header-Kasir-Fix-Source.zip' -print -quit)"
+          ZIP_FILE="$(find . -maxdepth 6 -type f -iname 'UsahoDen-v177-Header-Kasir-Responsif-Source.zip' -print -quit)"
 
           if [ -z "$ZIP_FILE" ]; then
-            echo "Source ZIP v176 tidak ditemukan."
+            echo "Source ZIP v177 tidak ditemukan."
             find . -maxdepth 6 -type f -iname '*.zip' -print || true
             exit 1
           fi
@@ -41,7 +41,7 @@ jobs:
           PROJECT_DIR="$(find "$RUNNER_TEMP/usaho-source" -type f -path '*/app/build.gradle' -print -quit | sed 's#/app/build.gradle$##')"
 
           test -n "$PROJECT_DIR" || {
-            echo "app/build.gradle tidak ditemukan"
+            echo "app/build.gradle tidak ditemukan."
             exit 1
           }
 
@@ -148,8 +148,8 @@ jobs:
           cd "$PROJECT_DIR"
 
           grep -Fq "applicationId 'com.tokoku.app'" app/build.gradle
-          grep -Eq 'versionCode[[:space:]]+176' app/build.gradle
-          grep -Fq "versionName '3.22.36-v176-header-kasir-fix'" app/build.gradle
+          grep -Eq 'versionCode[[:space:]]+177' app/build.gradle
+          grep -Fq "versionName '3.22.37-v177-responsive-header-kasir'" app/build.gradle
 
           gradle :app:assembleRelease --no-daemon --stacktrace
 
@@ -168,17 +168,17 @@ jobs:
             | tee "$RUNNER_TEMP/apk-info.txt"
 
           grep -Fq "package: name='com.tokoku.app'" "$RUNNER_TEMP/apk-info.txt"
-          grep -Fq "versionCode='176'" "$RUNNER_TEMP/apk-info.txt"
+          grep -Fq "versionCode='177'" "$RUNNER_TEMP/apk-info.txt"
 
           mkdir -p output
 
-          cp "$APK" output/UsahoDen-v176-Header-Kasir-Fix.apk
+          cp "$APK" output/UsahoDen-v177-Header-Kasir-Responsif.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: UsahoDen-v176-Header-Kasir-Fix
-          path: output/UsahoDen-v176-Header-Kasir-Fix.apk
+          name: UsahoDen-v177-Header-Kasir-Responsif
+          path: output/UsahoDen-v177-Header-Kasir-Responsif.apk
           if-no-files-found: error
           retention-days: 14
 
